@@ -1,22 +1,70 @@
-# Test Weight Optimization Specialist
+# Test Analysis Orchestration System
 
-A Python library for analyzing test question metrics and generating optimal weight recommendations for educational assessments.
+A comprehensive system for analyzing student test performance data using parallel agent processing with weight optimization and recommendations.
 
-## Features
+## Overview
 
-- **Weight Optimization**: Calculates recommended question weights using discrimination, difficulty, and variance metrics
-- **Question Analysis**: Provides actionable recommendations for each test question
-- **Test-Level Insights**: Generates overall test improvement suggestions
-- **Priority Identification**: Highlights top 5 questions needing immediate attention
-- **Excel Export**: Creates detailed spreadsheets with multiple analysis views
+This system provides automated analysis of educational test data including:
+- Statistical metrics calculation (difficulty, discrimination, reliability)
+- Quality assessment of test questions
+- **Weight optimization using discrimination, difficulty, and variance metrics**
+- **Automated recommendations for test improvement**
+- Visual reports and data exports
+
+## Architecture
+
+The system uses an orchestrator pattern with three specialized agents:
+
+1. **Orchestrator**: Coordinates data loading, validation, and agent execution
+2. **Agent 1 (Metrics Calculator)**: Computes statistical metrics for questions and tests
+3. **Agent 2 (Visualization Generator)**: Creates charts and visual reports (stub - to be implemented)
+4. **Agent 3 (Recommendation Engine)**: Generates actionable recommendations with optimal weight calculations
 
 ## Installation
 
 ```bash
 pip install -r requirements.txt
+
+# For development
+pip install -r requirements-dev.txt
 ```
 
-## Quick Start
+## Usage
+
+### Basic Usage
+
+```python
+from test_analysis import TestAnalysisOrchestrator
+
+# Initialize with Excel file path
+orchestrator = TestAnalysisOrchestrator("student_scores.xlsx")
+
+# Run complete analysis
+results = orchestrator.run(output_dir="./output")
+
+print(f"Analysis complete: {results['success']}")
+print(f"Output files: {results['output_files']}")
+```
+
+### With Custom Weights
+
+```python
+weights = {
+    'Q1': 2.0,  # Double weight for Q1
+    'Q2': 1.5,
+    'Q3': 1.0,
+    'Q4': 1.0,
+    'Q5': 0.5
+}
+
+orchestrator = TestAnalysisOrchestrator(
+    "student_scores.xlsx",
+    current_weights=weights
+)
+results = orchestrator.run()
+```
+
+### Using the Weight Optimizer Directly
 
 ```python
 from weight_optimizer import WeightOptimizer, WeightOptimizerConfig
@@ -60,8 +108,63 @@ print(results['test_recommendations'])
 optimizer.save_to_excel(results, 'output.xlsx')
 ```
 
-## Weight Calculation Formula
+### Using Individual Agents
 
+```python
+from test_analysis import MetricsCalculator
+import pandas as pd
+
+# Load your own data
+scores_df = pd.read_excel("scores.xlsx")
+
+# Run just the metrics calculator
+calculator = MetricsCalculator(scores_df)
+metrics = calculator.run()
+
+# Access specific metrics
+print(metrics['question_metrics'])
+print(metrics['test_statistics'])
+```
+
+## Input Format
+
+The Excel file should have:
+- First column: Student identifiers (ID, name, etc.)
+- Remaining columns: Question scores (numeric)
+
+Example:
+```
+Student_ID | Q1  | Q2  | Q3  | Q4  | Q5
+S001       | 10  | 8   | 7   | 9   | 6
+S002       | 9   | 7   | 8   | 8   | 7
+...
+```
+
+## Output Files
+
+The orchestrator generates three output files:
+
+1. **Excel Workbook** (`test_analysis_TIMESTAMP.xlsx`)
+   - Raw_Scores sheet
+   - Question_Metrics sheet
+   - Test_Statistics sheet
+   - Quality_Flags sheet
+   - **Recommended_Weights sheet**
+   - **Priority_Items sheet**
+
+2. **HTML Report** (`test_analysis_TIMESTAMP.html`)
+   - Interactive report with tables and visualizations
+   - Question quality summary
+   - Test statistics overview
+
+3. **Text Summary** (`test_analysis_TIMESTAMP.txt`)
+   - Quick overview of key findings
+   - Quality distribution
+   - Reliability metrics
+
+## Weight Optimization
+
+### Formula
 ```
 Recommended_Weight = (Discrimination_Index × α) + (Difficulty_Penalty × β) + (Variance_Factor × γ)
 ```
@@ -75,43 +178,51 @@ Default parameters: α=0.5, β=0.3, γ=0.2
    - `exp(-((difficulty - 0.55)² / (2 × 0.15²))`
 3. **Variance Factor**: Normalized standard deviation
 
-## Output Structure
-
-```python
-{
-    'recommended_weights': Dict[str, float],      # question_id: weight (%)
-    'weight_changes': DataFrame,                   # Current vs recommended
-    'question_recommendations': DataFrame,         # Per-question actions
-    'test_recommendations': List[str],            # Overall insights
-    'priority_items': DataFrame,                   # Top 5 urgent issues
-    'excel_sheets': {
-        'question_analysis': DataFrame,
-        'question_rankings': DataFrame,
-        'distribution_details': DataFrame,
-        'recommendations': DataFrame
-    }
-}
-```
-
-## Recommendation Actions
+### Recommendation Actions
 
 - **Keep as-is**: Metrics within acceptable range
 - **Adjust weight**: Good metrics but weight mismatch
 - **Review carefully**: Question has concerning metrics
 - **Consider removing**: Severe issues (negative/very poor discrimination)
 
-## Running Examples
+## Metrics Calculated
 
-```bash
-python example_usage.py
-```
+### Per-Question Metrics
+- **Difficulty Index**: Mean score / max points (0 = hard, 1 = easy)
+- **Discrimination Index**: Difference in performance between top and bottom 27%
+- **Item-Total Correlation**: Correlation with total score (minus the item)
+- **Predictive Power**: How well the question predicts overall performance
+
+### Quality Flags
+- **Good**: High discrimination (>0.3), moderate difficulty (0.3-0.8)
+- **Review**: Marginal metrics that may need adjustment
+- **Poor**: Low or negative discrimination
+
+### Test-Level Metrics
+- Cronbach's Alpha (reliability)
+- Score distribution statistics
+- Upper/Lower group cutoffs
 
 ## Running Tests
 
 ```bash
-python -m pytest test_optimizer.py -v
-# or
+# Run all tests
+pytest tests/
+
+# Run with coverage
+pytest tests/ --cov=test_analysis --cov-report=html
+
+# Run specific test file
+pytest tests/test_metrics_calculator.py -v
+
+# Run weight optimizer tests
 python test_optimizer.py
+```
+
+## Running Examples
+
+```bash
+python example_usage.py
 ```
 
 ## Configuration
@@ -132,17 +243,29 @@ config = WeightOptimizerConfig(
 optimizer = WeightOptimizer(config)
 ```
 
-## Input Data Requirements
+## Project Structure
 
-The `question_metrics` DataFrame must contain:
-- `question_id`: Unique identifier for each question
-- `difficulty`: Proportion of students answering correctly (0-1)
-- `discrimination`: Discrimination index (typically -1 to 1)
-- `std_dev`: Standard deviation of responses
-
-Optional columns:
-- `upper_group_correct`: Proportion correct in upper 27%
-- `lower_group_correct`: Proportion correct in lower 27%
+```
+TestEvaluations/
+├── test_analysis/
+│   ├── __init__.py
+│   ├── orchestrator.py          # Main coordinator
+│   ├── data_loader.py           # Data loading utilities
+│   ├── metrics_calculator.py    # Agent 1: Statistical analysis
+│   ├── visualization_generator.py  # Agent 2: Charts (stub)
+│   └── recommendation_engine.py    # Agent 3: Recommendations
+├── tests/
+│   ├── __init__.py
+│   ├── test_orchestrator.py
+│   └── test_metrics_calculator.py
+├── weight_optimizer.py          # Standalone weight optimization
+├── example_usage.py             # Demo script
+├── test_optimizer.py            # Weight optimizer tests
+├── requirements.txt
+├── requirements-dev.txt
+├── setup.py
+└── README.md
+```
 
 ## License
 
