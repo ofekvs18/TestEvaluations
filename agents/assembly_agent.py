@@ -578,7 +578,7 @@ class AssemblyAgent:
 </html>"""
 
         output_path = self.output_dir / f"{base_name}_report.html"
-        output_path.write_text(html_content)
+        output_path.write_text(html_content, encoding='utf-8')
 
         return output_path
 
@@ -797,7 +797,7 @@ Report generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 """
 
         output_path = self.output_dir / f"{base_name}_summary.txt"
-        output_path.write_text(summary_text)
+        output_path.write_text(summary_text, encoding='utf-8')
 
         return output_path
 
