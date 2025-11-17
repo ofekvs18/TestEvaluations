@@ -1,1 +1,1 @@
-"""Tests for Test Evaluations system."""
+"""Test suite for Test Analysis Orchestration System."""

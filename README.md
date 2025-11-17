@@ -1,18 +1,27 @@
-# Test Evaluations - Multi-Agent Analysis System
+# Test Analysis Orchestration System
 
-A comprehensive test evaluation system using a multi-agent architecture for psychometric analysis and visualization of educational assessments.
+A comprehensive system for analyzing student test performance data using a multi-agent architecture with parallel processing.
 
 ## Overview
 
-This system uses a pipeline of specialized agents to analyze test results:
+This system provides automated analysis of educational test data including:
+- Statistical metrics calculation (difficulty, discrimination, reliability)
+- Quality assessment of test questions
+- Visual reports with static and interactive charts
+- Automated recommendations for test improvement
 
-- **Agent 1: Metrics Calculator** - Computes psychometric metrics (difficulty, discrimination, reliability)
-- **Agent 2: Visualization Generator** - Creates static and interactive visualizations
-- **Agent 3: Report Generator** - Compiles findings into Excel and HTML reports
+## Architecture
+
+The system uses an orchestrator pattern with specialized agents:
+
+1. **Orchestrator**: Coordinates data loading, validation, and agent execution
+2. **Agent 1 (Metrics Calculator)**: Computes statistical metrics for questions and tests
+3. **Agent 2 (Visualization Generator)**: Creates static and interactive visualizations
+4. **Agent 3 (Recommendation Engine)**: Generates actionable recommendations (stub)
 
 ## Agent 2: Visualization Generator
 
-The Visualization Generator is the second agent in the pipeline. It receives calculated metrics from Agent 1 and produces comprehensive visualizations for both Excel (static) and HTML (interactive) outputs.
+The Visualization Generator creates comprehensive visualizations for both Excel (static) and HTML (interactive) outputs.
 
 ### Features
 
@@ -23,7 +32,7 @@ The Visualization Generator is the second agent in the pipeline. It receives cal
 - **Quality Distribution** - Pie and bar charts of good/review/poor question counts
 
 #### Interactive HTML Visualizations (Plotly)
-- **Individual Question Analysis** - Scrollable section with score distributions and metrics for each question
+- **Individual Question Analysis** - Scrollable section with score distributions and metrics
 - **Interactive Difficulty Curve** - Toggle between original/sorted order with hover tooltips
 - **Discrimination-Difficulty Bubble Chart** - Size represents weight, rich hover information
 - **Sortable Weight Comparison** - Multiple sorting criteria with change indicators
@@ -50,154 +59,197 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
+
+# For development
+pip install -r requirements-dev.txt
 ```
 
-## Quick Start
+## Usage
+
+### Basic Usage with Orchestrator
+
+```python
+from test_analysis import TestAnalysisOrchestrator
+
+# Initialize with Excel file path
+orchestrator = TestAnalysisOrchestrator("student_scores.xlsx")
+
+# Run complete analysis
+results = orchestrator.run(output_dir="./output")
+
+print(f"Analysis complete: {results['success']}")
+print(f"Output files: {results['output_files']}")
+```
+
+### With Custom Weights
+
+```python
+weights = {
+    'Q1': 2.0,  # Double weight for Q1
+    'Q2': 1.5,
+    'Q3': 1.0,
+    'Q4': 1.0,
+    'Q5': 0.5
+}
+
+orchestrator = TestAnalysisOrchestrator(
+    "student_scores.xlsx",
+    current_weights=weights
+)
+results = orchestrator.run()
+```
+
+### Using Individual Agents
+
+```python
+from test_analysis import MetricsCalculator
+import pandas as pd
+
+# Load your own data
+scores_df = pd.read_excel("scores.xlsx")
+
+# Run just the metrics calculator
+calculator = MetricsCalculator(scores_df)
+metrics = calculator.run()
+
+# Access specific metrics
+print(metrics['question_metrics'])
+print(metrics['test_statistics'])
+```
+
+### Using the Visualization Generator (Agent 2)
 
 ```python
 from src.agents.visualization_generator import VisualizationGenerator
-from src.models.metrics import QuestionMetrics, TestStatistics, QualityCategory
+from src.models.metrics import QuestionMetrics, TestStatistics
 
-# 1. Prepare your data (from Agent 1)
-question_metrics = [...]  # List of QuestionMetrics from Agent 1
-test_statistics = TestStatistics(...)  # From Agent 1
+# Prepare data from Agent 1
+question_metrics = [...]  # List of QuestionMetrics
+test_statistics = TestStatistics(...)
 
-# 2. Initialize the generator
+# Initialize the generator
 generator = VisualizationGenerator(output_dir="output")
 
-# 3. Generate all visualizations
+# Generate all visualizations
 output = generator.generate(
     question_metrics=question_metrics,
     test_statistics=test_statistics,
 )
 
-# 4. Access the results
+# Access the results
 print("Excel images:", output.excel_images)
 print("Plotly figures:", output.plotly_figures)
 
-# 5. Save interactive HTML report
+# Save interactive HTML report
 html_path = generator.save_plotly_html(output, "report.html")
 ```
 
-## Example
+## Input Format
 
-Run the complete example to see the agent in action:
+The Excel file should have:
+- First column: Student identifiers (ID, name, etc.)
+- Remaining columns: Question scores (numeric)
+
+Example:
+```
+Student_ID | Q1  | Q2  | Q3  | Q4  | Q5
+S001       | 10  | 8   | 7   | 9   | 6
+S002       | 9   | 7   | 8   | 8   | 7
+...
+```
+
+## Output Files
+
+The orchestrator generates three output files:
+
+1. **Excel Workbook** (`test_analysis_TIMESTAMP.xlsx`)
+   - Raw_Scores sheet
+   - Question_Metrics sheet
+   - Test_Statistics sheet
+   - Quality_Flags sheet
+
+2. **HTML Report** (`test_analysis_TIMESTAMP.html`)
+   - Interactive report with tables and visualizations
+   - Question quality summary
+   - Test statistics overview
+
+3. **Text Summary** (`test_analysis_TIMESTAMP.txt`)
+   - Quick overview of key findings
+   - Quality distribution
+   - Reliability metrics
+
+## Metrics Calculated
+
+### Per-Question Metrics (Agent 1)
+- **Difficulty Index**: Mean score / max points (0 = hard, 1 = easy)
+- **Discrimination Index**: Difference in performance between top and bottom 27%
+- **Item-Total Correlation**: Correlation with total score (minus the item)
+- **Predictive Power**: How well the question predicts overall performance
+
+### Quality Flags
+- **Good**: High discrimination (>0.3), moderate difficulty (0.3-0.8)
+- **Review**: Marginal metrics that may need adjustment
+- **Poor**: Low or negative discrimination
+
+### Test-Level Metrics
+- Cronbach's Alpha (reliability)
+- Score distribution statistics (mean, median, std dev, skewness, kurtosis)
+- Upper/Lower group cutoffs (27th and 73rd percentiles)
+- Standard Error of Measurement (SEM)
+
+## Running Tests
 
 ```bash
-cd TestEvaluations
+# Run all tests
+pytest tests/
+
+# Run with coverage
+pytest tests/ --cov=test_analysis --cov-report=html
+
+# Run specific test file
+pytest tests/test_metrics_calculator.py -v
+```
+
+## Running Examples
+
+```bash
+# Run the visualization generator example
 python examples/example_usage.py
 ```
 
-This will:
-1. Generate sample data simulating Agent 1 output
-2. Create all static Excel images in `output/`
-3. Generate all interactive Plotly figures
-4. Save a complete HTML report to `output/test_evaluation_report.html`
+This will generate sample data, create all visualizations, and save an HTML report.
 
 ## Project Structure
 
 ```
 TestEvaluations/
-├── src/
+├── test_analysis/                          # Core orchestrator and Agent 1
+│   ├── __init__.py
+│   ├── orchestrator.py                     # Main coordinator
+│   ├── data_loader.py                      # Data loading utilities
+│   ├── metrics_calculator.py               # Agent 1: Statistical analysis
+│   ├── visualization_generator.py          # Agent 2 stub (to be integrated)
+│   └── recommendation_engine.py            # Agent 3: Recommendations (stub)
+├── src/                                    # Agent 2: Visualization Generator
 │   ├── agents/
-│   │   ├── visualization_generator.py    # Main Agent 2 orchestrator
-│   │   ├── excel_visualizations.py       # Static chart generator
-│   │   └── plotly_visualizations.py      # Interactive chart generator
+│   │   ├── visualization_generator.py      # Main visualization orchestrator
+│   │   ├── excel_visualizations.py         # Static chart generator
+│   │   └── plotly_visualizations.py        # Interactive chart generator
 │   ├── models/
-│   │   └── metrics.py                     # Data models and types
+│   │   └── metrics.py                       # Data models and types
 │   └── utils/
-│       └── colors.py                      # Colorblind-friendly palettes
+│       └── colors.py                        # Colorblind-friendly palettes
 ├── examples/
-│   └── example_usage.py                   # Complete usage example
-├── output/                                # Generated visualizations
-├── tests/                                 # Unit tests
-├── requirements.txt                       # Python dependencies
-├── pyproject.toml                         # Project configuration
-└── README.md                              # This file
+│   └── example_usage.py                     # Complete visualization example
+├── tests/
+│   ├── test_orchestrator.py
+│   └── test_metrics_calculator.py
+├── output/                                  # Generated visualizations
+├── requirements.txt                         # Python dependencies
+├── requirements-dev.txt                     # Dev dependencies
+├── setup.py                                 # Package setup
+└── README.md                                # This file
 ```
-
-## Input Format
-
-The Visualization Generator expects the following inputs from Agent 1:
-
-### QuestionMetrics (per question)
-```python
-{
-    'question_id': str,
-    'question_number': int,
-    'mean_score': float,
-    'median_score': float,
-    'std_dev': float,
-    'min_score': float,
-    'max_score': float,
-    'difficulty_index': float,      # P-value (0-1)
-    'discrimination_index': float,  # Point-biserial or upper-lower 27%
-    'current_weight': float,
-    'recommended_weight': float,
-    'max_possible_score': float,
-    'quality_category': str,        # 'good', 'review', or 'poor'
-    'is_curve_breaker': bool,
-    'quality_notes': List[str],
-    'score_distribution': np.ndarray  # Optional: raw scores
-}
-```
-
-### TestStatistics (overall)
-```python
-{
-    'total_questions': int,
-    'total_students': int,
-    'max_possible_score': float,
-    'mean_total_score': float,
-    'median_total_score': float,
-    'std_dev_total_score': float,
-    'min_total_score': float,
-    'max_total_score': float,
-    'cronbach_alpha': float,
-    'sem': float,
-    'skewness': float,
-    'kurtosis': float,
-    'good_questions_count': int,
-    'review_questions_count': int,
-    'poor_questions_count': int,
-    'upper_27_cutoff': float,
-    'lower_27_cutoff': float,
-    'student_total_scores': np.ndarray  # Optional: all student totals
-}
-```
-
-## Output Format
-
-The agent returns a `VisualizationOutput` object:
-
-```python
-{
-    'excel_images': {
-        'difficulty_curve': 'output/difficulty_curve.png',
-        'scatter': 'output/discrimination_difficulty_scatter.png',
-        'weights': 'output/weights_comparison.png',
-        'quality': 'output/quality_distribution.png'
-    },
-    'plotly_figures': {
-        'question_details': <plotly.graph_objects.Figure>,
-        'difficulty_curve': <plotly.graph_objects.Figure>,
-        'scatter': <plotly.graph_objects.Figure>,
-        'weights': <plotly.graph_objects.Figure>,
-        'heatmap': <plotly.graph_objects.Figure>,
-        'distribution': <plotly.graph_objects.Figure>
-    }
-}
-```
-
-## Dependencies
-
-- **pandas** >= 1.5.0 - Data manipulation
-- **numpy** >= 1.21.0 - Numerical operations
-- **matplotlib** >= 3.5.0 - Static visualizations
-- **seaborn** >= 0.12.0 - Statistical plotting
-- **plotly** >= 5.10.0 - Interactive visualizations
-- **openpyxl** >= 3.0.0 - Excel support
-- **Pillow** >= 9.0.0 - Image processing
 
 ## Colorblind Accessibility
 
@@ -210,10 +262,18 @@ All visualizations use the Wong (2011) colorblind-friendly palette:
 - Vermillion: #D55E00
 - Reddish Purple: #CC79A7
 
-This ensures that charts are distinguishable for people with:
+This ensures charts are distinguishable for people with:
 - Deuteranopia (red-green color blindness)
 - Protanopia (red color blindness)
 - Tritanopia (blue-yellow color blindness)
+
+## Future Development
+
+- Full integration of Agent 2 visualizations with orchestrator
+- Complete implementation of Agent 3 (Recommendation Engine)
+- Dashboard web interface
+- Additional export formats (PDF, PowerPoint)
+- Batch processing for multiple tests
 
 ## Contributing
 
