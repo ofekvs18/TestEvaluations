@@ -129,6 +129,9 @@ dmypy.json
 
 # Generated output
 output/
+*.xlsx
+*.xls
+*.html
 *.png
 !docs/*.png
 
