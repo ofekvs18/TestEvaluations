@@ -1,15 +1,14 @@
 # Test Analysis Orchestration System
 
-A comprehensive system for analyzing student test performance data using parallel agent processing.
+A comprehensive system for analyzing student test performance data using a multi-agent architecture with parallel processing.
 
 ## Overview
 
 This system provides automated analysis of educational test data including:
 - Statistical metrics calculation (difficulty, discrimination, reliability)
 - Quality assessment of test questions
+- Visual reports with static and interactive charts
 - Automated recommendations for test improvement
-- Visual reports and data exports
-- Interactive HTML dashboards with Plotly visualizations
 
 ## Architecture
 
@@ -17,13 +16,49 @@ The system uses an orchestrator pattern with specialized agents:
 
 1. **Orchestrator**: Coordinates data loading, validation, and agent execution
 2. **Agent 1 (Metrics Calculator)**: Computes statistical metrics for questions and tests
-3. **Agent 2 (Visualization Generator)**: Creates charts and visual reports
+3. **Agent 2 (Visualization Generator)**: Creates static and interactive visualizations
 4. **Agent 3 (Recommendation Engine)**: Generates actionable recommendations
 5. **Assembly Agent**: Combines all outputs into final deliverables (Excel, HTML, text)
+
+## Agent 2: Visualization Generator
+
+The Visualization Generator creates comprehensive visualizations for both Excel (static) and HTML (interactive) outputs.
+
+### Features
+
+#### Excel Static Visualizations (matplotlib/seaborn)
+- **Difficulty Curve Chart** - Line plot showing question difficulty progression with outlier detection
+- **Discrimination vs. Difficulty Scatter** - 4-quadrant plot color-coded by question quality
+- **Weights Comparison Bar Chart** - Current vs. recommended question weights
+- **Quality Distribution** - Pie and bar charts of good/review/poor question counts
+
+#### Interactive HTML Visualizations (Plotly)
+- **Individual Question Analysis** - Scrollable section with score distributions and metrics
+- **Interactive Difficulty Curve** - Toggle between original/sorted order with hover tooltips
+- **Discrimination-Difficulty Bubble Chart** - Size represents weight, rich hover information
+- **Sortable Weight Comparison** - Multiple sorting criteria with change indicators
+- **Correlation Heatmap** - Inter-question correlation matrix to identify redundant questions
+- **Student Distribution** - Overall score histogram with percentile markers
+
+### Design Principles
+
+- **Colorblind-friendly** - Uses Wong (2011) palette distinguishable for all color vision types
+- **Publication-ready** - High DPI static images with professional styling
+- **Interactive** - Rich tooltips, sorting, filtering for HTML output
+- **Professional** - Clean, consistent styling across all visualizations
 
 ## Installation
 
 ```bash
+# Clone the repository
+git clone <repository-url>
+cd TestEvaluations
+
+# Create virtual environment (recommended)
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
 pip install -r requirements.txt
 
 # For development
@@ -32,7 +67,7 @@ pip install -r requirements-dev.txt
 
 ## Usage
 
-### Python API
+### Basic Usage with Orchestrator
 
 ```python
 from test_analysis import TestAnalysisOrchestrator
@@ -95,6 +130,33 @@ print(metrics['question_metrics'])
 print(metrics['test_statistics'])
 ```
 
+### Using the Visualization Generator (Agent 2)
+
+```python
+from src.agents.visualization_generator import VisualizationGenerator
+from src.models.metrics import QuestionMetrics, TestStatistics
+
+# Prepare data from Agent 1
+question_metrics = [...]  # List of QuestionMetrics
+test_statistics = TestStatistics(...)
+
+# Initialize the generator
+generator = VisualizationGenerator(output_dir="output")
+
+# Generate all visualizations
+output = generator.generate(
+    question_metrics=question_metrics,
+    test_statistics=test_statistics,
+)
+
+# Access the results
+print("Excel images:", output.excel_images)
+print("Plotly figures:", output.plotly_figures)
+
+# Save interactive HTML report
+html_path = generator.save_plotly_html(output, "report.html")
+```
+
 ## Input Format
 
 The Excel file should have:
@@ -133,7 +195,7 @@ The system generates three output files:
 
 ## Metrics Calculated
 
-### Per-Question Metrics
+### Per-Question Metrics (Agent 1)
 - **Difficulty Index**: Mean score / max points (0 = hard, 1 = easy)
 - **Discrimination Index**: Difference in performance between top and bottom 27%
 - **Item-Total Correlation**: Correlation with total score (minus the item)
@@ -146,8 +208,9 @@ The system generates three output files:
 
 ### Test-Level Metrics
 - Cronbach's Alpha (reliability)
-- Score distribution statistics
-- Upper/Lower group cutoffs
+- Score distribution statistics (mean, median, std dev, skewness, kurtosis)
+- Upper/Lower group cutoffs (27th and 73rd percentiles)
+- Standard Error of Measurement (SEM)
 
 ## Dependencies
 
@@ -156,8 +219,10 @@ The system generates three output files:
 - numpy: Numerical computations
 - plotly: Interactive visualizations
 - matplotlib: Static visualizations
+- seaborn: Statistical visualizations
 - kaleido: Plotly image export
 - xlrd: Legacy Excel format support
+- Pillow: Image processing
 
 ## Running Tests
 
@@ -172,34 +237,93 @@ pytest tests/ --cov=test_analysis --cov-report=html
 pytest tests/test_metrics_calculator.py -v
 ```
 
+## Running Examples
+
+```bash
+# Run the visualization generator example
+python examples/example_usage.py
+```
+
+This will generate sample data, create all visualizations, and save an HTML report.
+
 ## Project Structure
 
 ```
 TestEvaluations/
-├── test_analysis/
+├── test_analysis/                          # Core orchestrator and Agent 1
 │   ├── __init__.py
-│   ├── orchestrator.py          # Main coordinator
-│   ├── data_loader.py           # Data loading utilities
-│   ├── metrics_calculator.py    # Agent 1: Statistical analysis
-│   ├── visualization_generator.py  # Agent 2: Charts
-│   └── recommendation_engine.py    # Agent 3: Recommendations
-├── agents/
+│   ├── orchestrator.py                     # Main coordinator
+│   ├── data_loader.py                      # Data loading utilities
+│   ├── metrics_calculator.py               # Agent 1: Statistical analysis
+│   ├── visualization_generator.py          # Agent 2 stub (to be integrated)
+│   └── recommendation_engine.py            # Agent 3: Recommendations (stub)
+├── src/                                    # Agent 2: Visualization Generator
+│   ├── agents/
+│   │   ├── visualization_generator.py      # Main visualization orchestrator
+│   │   ├── excel_visualizations.py         # Static chart generator
+│   │   └── plotly_visualizations.py        # Interactive chart generator
+│   ├── models/
+│   │   └── metrics.py                       # Data models and types
+│   └── utils/
+│       └── colors.py                        # Colorblind-friendly palettes
+├── agents/                                  # Alternative agent implementations
 │   ├── __init__.py
-│   ├── assembly_agent.py        # Final report assembly
-│   ├── metrics_agent.py         # Alternative metrics implementation
-│   ├── visualization_agent.py   # Alternative visualization implementation
-│   └── recommendations_agent.py # Alternative recommendations implementation
+│   ├── assembly_agent.py                    # Final report assembly
+│   ├── metrics_agent.py                     # Alternative metrics implementation
+│   ├── visualization_agent.py              # Alternative visualization implementation
+│   └── recommendations_agent.py            # Alternative recommendations implementation
+├── examples/
+│   └── example_usage.py                     # Complete visualization example
 ├── tests/
-│   ├── __init__.py
 │   ├── test_orchestrator.py
 │   └── test_metrics_calculator.py
-├── main.py                      # CLI entry point
-├── requirements.txt
-├── requirements-dev.txt
-├── setup.py
-└── README.md
+├── main.py                                  # CLI entry point
+├── output/                                  # Generated visualizations
+├── requirements.txt                         # Python dependencies
+├── requirements-dev.txt                     # Dev dependencies
+├── setup.py                                 # Package setup
+└── README.md                                # This file
 ```
+
+## Colorblind Accessibility
+
+All visualizations use the Wong (2011) colorblind-friendly palette:
+- Blue: #0072B2
+- Orange: #E69F00
+- Bluish Green: #009E73
+- Yellow: #F0E442
+- Sky Blue: #56B4E9
+- Vermillion: #D55E00
+- Reddish Purple: #CC79A7
+
+This ensures charts are distinguishable for people with:
+- Deuteranopia (red-green color blindness)
+- Protanopia (red color blindness)
+- Tritanopia (blue-yellow color blindness)
 
 ## Future Development
 
-The system supports both the core `test_analysis` package and the `agents` package implementations. These can be integrated to provide maximum flexibility in test analysis workflows.
+- Full integration of Assembly Agent with orchestrator pipeline
+- Complete integration of Agent 2 visualizations with orchestrator
+- Dashboard web interface
+- Additional export formats (PDF, PowerPoint)
+- Batch processing for multiple tests
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## License
+
+MIT License - see LICENSE file for details.
+
+## References
+
+- Wong, B. (2011). Points of view: Color blindness. Nature Methods, 8(6), 441.
+- Classical Test Theory psychometric analysis standards
+- Plotly.js for interactive visualization
+- Matplotlib/Seaborn for publication-quality static charts
