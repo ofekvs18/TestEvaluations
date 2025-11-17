@@ -425,8 +425,9 @@ class TestAnalysisOrchestrator:
         print("\n[Step 3/3] Assembling final outputs...")
         assembly_result = self.assemble_final_outputs()
 
-        # Calculate execution time
-        total_time = (self.timestamps['assembly_done'] - self.timestamps['start']).total_seconds()
+        # Calculate execution time (handle case where assembly failed)
+        end_time = self.timestamps.get('assembly_done') or datetime.now()
+        total_time = (end_time - self.timestamps['start']).total_seconds()
 
         # Compile final results
         final_result = {

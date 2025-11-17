@@ -138,6 +138,9 @@ class AssemblyAgent:
         # Write data
         for row_idx, row in enumerate(df.itertuples(index=False), 2):
             for col_idx, value in enumerate(row, 1):
+                # Convert lists to comma-separated strings for Excel compatibility
+                if isinstance(value, list):
+                    value = ", ".join(str(v) for v in value)
                 ws.cell(row=row_idx, column=col_idx, value=value)
 
         # Apply conditional formatting for difficulty and discrimination
@@ -182,6 +185,9 @@ class AssemblyAgent:
                     # Data
                     for _, row in df.iterrows():
                         for col_idx, value in enumerate(row, 1):
+                            # Convert lists to comma-separated strings
+                            if isinstance(value, list):
+                                value = ", ".join(str(v) for v in value)
                             ws.cell(row=current_row, column=col_idx, value=value)
                         current_row += 1
                 else:
@@ -214,6 +220,9 @@ class AssemblyAgent:
             if isinstance(data, dict):
                 for key, value in data.items():
                     ws.cell(row=current_row, column=1, value=key)
+                    # Convert lists to comma-separated strings
+                    if isinstance(value, list):
+                        value = ", ".join(str(v) for v in value)
                     ws.cell(row=current_row, column=2, value=value)
                     current_row += 1
             elif isinstance(data, list):
