@@ -1,4 +1,4 @@
-"""Unit tests for Test Analysis Orchestrator."""
+"""Unit tests for the consolidated Test Analysis Orchestrator."""
 
 import pytest
 import pandas as pd
@@ -7,14 +7,7 @@ from pathlib import Path
 import tempfile
 import os
 
-from test_analysis.orchestrator import TestAnalysisOrchestrator
-from test_analysis.data_loader import (
-    load_excel_file,
-    validate_data_structure,
-    parse_student_data,
-    calculate_basic_statistics,
-    infer_max_points
-)
+from orchestrator import TestAnalysisOrchestrator, DataLoader
 
 
 @pytest.fixture
@@ -42,6 +35,27 @@ def sample_excel_file():
 
 
 @pytest.fixture
+def sample_csv_file():
+    """Create a temporary CSV file for testing."""
+    df = pd.DataFrame({
+        'Student_ID': ['S001', 'S002', 'S003', 'S004', 'S005'],
+        'Q1': [10, 8, 6, 4, 2],
+        'Q2': [5, 5, 5, 5, 5],
+        'Q3': [8, 6, 4, 2, 0]
+    })
+
+    with tempfile.NamedTemporaryFile(suffix='.csv', delete=False, mode='w') as f:
+        temp_path = f.name
+
+    df.to_csv(temp_path, index=False)
+
+    yield temp_path
+
+    # Cleanup
+    os.unlink(temp_path)
+
+
+@pytest.fixture
 def output_dir():
     """Create temporary output directory."""
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -53,104 +67,142 @@ class TestDataLoader:
 
     def test_load_excel_file_success(self, sample_excel_file):
         """Test successful Excel file loading."""
-        df = load_excel_file(sample_excel_file)
+        df = DataLoader.load_file(Path(sample_excel_file))
         assert isinstance(df, pd.DataFrame)
         assert len(df) == 10
         assert len(df.columns) == 6
 
-    def test_load_excel_file_not_found(self):
+    def test_load_csv_file_success(self, sample_csv_file):
+        """Test successful CSV file loading."""
+        df = DataLoader.load_file(Path(sample_csv_file))
+        assert isinstance(df, pd.DataFrame)
+        assert len(df) == 5
+        assert len(df.columns) == 4
+
+    def test_load_file_not_found(self):
         """Test loading non-existent file."""
         with pytest.raises(FileNotFoundError):
-            load_excel_file("nonexistent.xlsx")
+            DataLoader.load_file(Path("nonexistent.xlsx"))
 
-    def test_load_excel_file_invalid_format(self, sample_excel_file):
-        """Test loading file with wrong extension."""
-        # Create a file with wrong extension
+    def test_load_file_invalid_format(self):
+        """Test loading file with unsupported extension."""
         with tempfile.NamedTemporaryFile(suffix='.txt', delete=False) as f:
-            f.write(b"not an excel file")
+            f.write(b"not a valid file")
             temp_path = f.name
 
         try:
             with pytest.raises(ValueError):
-                load_excel_file(temp_path)
+                DataLoader.load_file(Path(temp_path))
         finally:
             os.unlink(temp_path)
 
-    def test_validate_data_structure_valid(self, sample_excel_file):
+    def test_validate_structure_valid(self, sample_excel_file):
         """Test validation of valid data structure."""
-        df = load_excel_file(sample_excel_file)
-        is_valid, message = validate_data_structure(df)
+        df = DataLoader.load_file(Path(sample_excel_file))
+        is_valid, message = DataLoader.validate_structure(df)
         assert is_valid is True
+        assert "valid" in message.lower()
 
-    def test_validate_data_structure_empty(self):
+    def test_validate_structure_empty(self):
         """Test validation of empty DataFrame."""
         df = pd.DataFrame()
-        is_valid, message = validate_data_structure(df)
+        is_valid, message = DataLoader.validate_structure(df)
         assert is_valid is False
+        assert "empty" in message.lower()
 
-    def test_validate_data_structure_single_column(self):
+    def test_validate_structure_single_column(self):
         """Test validation with only one column."""
         df = pd.DataFrame({'Student_ID': ['S1', 'S2']})
-        is_valid, message = validate_data_structure(df)
+        is_valid, message = DataLoader.validate_structure(df)
         assert is_valid is False
+
+    def test_validate_structure_no_numeric_columns(self):
+        """Test validation with no numeric columns."""
+        df = pd.DataFrame({
+            'Student_ID': ['S1', 'S2'],
+            'Name': ['Alice', 'Bob']
+        })
+        is_valid, message = DataLoader.validate_structure(df)
+        assert is_valid is False
+        assert "numeric" in message.lower()
 
     def test_parse_student_data(self, sample_excel_file):
         """Test parsing student data."""
-        raw_df = load_excel_file(sample_excel_file)
-        scores_df, student_ids, question_names = parse_student_data(raw_df)
+        raw_df = DataLoader.load_file(Path(sample_excel_file))
+        cleaned_df = DataLoader.parse_student_data(raw_df)
 
-        assert isinstance(scores_df, pd.DataFrame)
-        assert isinstance(student_ids, pd.Series)
-        assert isinstance(question_names, list)
-
+        assert isinstance(cleaned_df, pd.DataFrame)
         # Should have 10 students
-        assert len(scores_df) == 10
-        assert len(student_ids) == 10
-
-        # Should have 5 questions (excluding student ID)
-        assert len(scores_df.columns) == 5
-
+        assert len(cleaned_df) == 10
+        # Should have 6 columns (student ID + 5 questions)
+        assert len(cleaned_df.columns) == 6
         # No NaN values after parsing
-        assert scores_df.isnull().sum().sum() == 0
+        assert cleaned_df.isnull().sum().sum() == 0
+
+    def test_parse_student_data_renames_columns(self):
+        """Test that non-standard column names are renamed."""
+        df = pd.DataFrame({
+            'Student': ['S1', 'S2'],
+            1: [10, 8],
+            2: [5, 5]
+        })
+        cleaned_df = DataLoader.parse_student_data(df)
+
+        # Numeric columns should be renamed to Q1, Q2
+        assert 'Q1' in cleaned_df.columns
+        assert 'Q2' in cleaned_df.columns
+
+    def test_parse_student_data_fills_nan(self):
+        """Test that NaN values are filled with 0."""
+        df = pd.DataFrame({
+            'Student': ['S1', 'S2'],
+            'Q1': [10, np.nan],
+            'Q2': [np.nan, 5]
+        })
+        cleaned_df = DataLoader.parse_student_data(df)
+
+        assert cleaned_df.isnull().sum().sum() == 0
+        assert cleaned_df.loc[1, 'Q1'] == 0
+        assert cleaned_df.loc[0, 'Q2'] == 0
 
     def test_calculate_basic_statistics(self):
         """Test basic statistics calculation."""
         df = pd.DataFrame({
+            'Student': ['S1', 'S2', 'S3', 'S4', 'S5'],
             'Q1': [10, 8, 6, 4, 2],
             'Q2': [5, 5, 5, 5, 5]
         })
 
-        stats = calculate_basic_statistics(df)
+        stats = DataLoader.calculate_basic_statistics(df)
 
         assert stats['student_count'] == 5
         assert stats['question_count'] == 2
         assert 'mean_total_score' in stats
         assert 'std_total_score' in stats
+        assert 'min_total_score' in stats
+        assert 'max_total_score' in stats
+        assert 'median_total_score' in stats
         assert 'max_points_per_question' in stats
 
-    def test_infer_max_points_default(self):
-        """Test inferring max points from data."""
+        # Verify calculations
+        assert stats['max_points_per_question']['Q1'] == 10
+        assert stats['max_points_per_question']['Q2'] == 5
+
+    def test_calculate_basic_statistics_values(self):
+        """Test that basic statistics are calculated correctly."""
         df = pd.DataFrame({
-            'Q1': [10, 8, 6, 4, 2],
-            'Q2': [5, 4, 3, 2, 1]
+            'Student': ['S1', 'S2', 'S3'],
+            'Q1': [10, 10, 10],
+            'Q2': [5, 5, 5]
         })
 
-        max_pts = infer_max_points(df)
+        stats = DataLoader.calculate_basic_statistics(df)
 
-        assert max_pts['Q1'] == 10
-        assert max_pts['Q2'] == 5
-
-    def test_infer_max_points_provided(self):
-        """Test using provided max points."""
-        df = pd.DataFrame({
-            'Q1': [10, 8, 6, 4, 2],
-            'Q2': [5, 4, 3, 2, 1]
-        })
-
-        provided = {'Q1': 15, 'Q2': 10}
-        max_pts = infer_max_points(df, provided)
-
-        assert max_pts == provided
+        # All students have same score: 15
+        assert stats['mean_total_score'] == 15.0
+        assert stats['std_total_score'] == 0.0
+        assert stats['min_total_score'] == 15.0
+        assert stats['max_total_score'] == 15.0
 
 
 class TestOrchestratorInitialization:
@@ -160,37 +212,36 @@ class TestOrchestratorInitialization:
         """Test proper initialization."""
         orchestrator = TestAnalysisOrchestrator(sample_excel_file)
 
-        assert orchestrator.excel_file_path == sample_excel_file
-        assert orchestrator.current_weights == {}
-        assert orchestrator.provided_max_points is None
-        assert orchestrator.config == {}
+        assert orchestrator.data_path == Path(sample_excel_file)
+        assert orchestrator.weights_path is None
+        assert orchestrator.output_dir == Path("results")
 
         assert orchestrator.status['data_loaded'] is False
         assert orchestrator.status['data_validated'] is False
         assert orchestrator.status['data_parsed'] is False
 
-    def test_initialization_with_weights(self, sample_excel_file):
-        """Test initialization with provided weights."""
-        weights = {'Q1': 2.0, 'Q2': 1.5}
+    def test_initialization_with_weights_path(self, sample_excel_file):
+        """Test initialization with weights file path."""
+        with tempfile.NamedTemporaryFile(suffix='.csv', delete=False) as f:
+            weights_path = f.name
+            pd.DataFrame({'Q1': [1.5], 'Q2': [2.0]}).to_csv(weights_path, index=False)
+
+        try:
+            orchestrator = TestAnalysisOrchestrator(
+                sample_excel_file,
+                weights_path=weights_path
+            )
+            assert orchestrator.weights_path == Path(weights_path)
+        finally:
+            os.unlink(weights_path)
+
+    def test_initialization_with_custom_output_dir(self, sample_excel_file):
+        """Test initialization with custom output directory."""
         orchestrator = TestAnalysisOrchestrator(
             sample_excel_file,
-            current_weights=weights
+            output_dir="/custom/output"
         )
-
-        assert orchestrator.current_weights == weights
-
-    def test_initialization_with_config(self, sample_excel_file):
-        """Test initialization with configuration."""
-        config = {
-            'metrics': {'upper_lower_percent': 0.3},
-            'visualization': {'figure_dpi': 150}
-        }
-        orchestrator = TestAnalysisOrchestrator(
-            sample_excel_file,
-            config=config
-        )
-
-        assert orchestrator.config == config
+        assert orchestrator.output_dir == Path("/custom/output")
 
 
 class TestOrchestratorDataLoading:
@@ -205,11 +256,10 @@ class TestOrchestratorDataLoading:
         assert orchestrator.status['data_loaded'] is True
         assert orchestrator.status['data_validated'] is True
         assert orchestrator.status['data_parsed'] is True
+        assert orchestrator.status['basic_stats_calculated'] is True
 
-        assert orchestrator.scores_df is not None
-        assert orchestrator.student_ids is not None
-        assert orchestrator.question_names is not None
-        assert orchestrator.max_points is not None
+        assert orchestrator.raw_data is not None
+        assert orchestrator.cleaned_data is not None
         assert orchestrator.basic_stats is not None
 
     def test_load_and_validate_data_failure(self):
@@ -232,15 +282,12 @@ class TestOrchestratorDataLoading:
         assert 'mean_total_score' in stats
         assert stats['mean_total_score'] > 0
 
-    def test_default_weights_set(self, sample_excel_file):
-        """Test that default weights are set after loading."""
+    def test_timestamp_set_after_loading(self, sample_excel_file):
+        """Test that timestamp is set after loading."""
         orchestrator = TestAnalysisOrchestrator(sample_excel_file)
         orchestrator.load_and_validate_data()
 
-        # Should have weights for all questions
-        assert len(orchestrator.current_weights) == 5
-        # All default to 1.0
-        assert all(w == 1.0 for w in orchestrator.current_weights.values())
+        assert orchestrator.timestamps['data_ready'] is not None
 
 
 class TestOrchestratorAgentExecution:
@@ -251,7 +298,7 @@ class TestOrchestratorAgentExecution:
         orchestrator = TestAnalysisOrchestrator(sample_excel_file)
         orchestrator.load_and_validate_data()
 
-        result = orchestrator.run_agents_parallel()
+        result = orchestrator.run_agents(parallel=True)
 
         assert result is True
         assert orchestrator.status['agents_completed']['metrics'] is True
@@ -262,94 +309,128 @@ class TestOrchestratorAgentExecution:
         assert orchestrator.visualization_results is not None
         assert orchestrator.recommendation_results is not None
 
+    def test_run_agents_sequential(self, sample_excel_file):
+        """Test sequential agent execution."""
+        orchestrator = TestAnalysisOrchestrator(sample_excel_file)
+        orchestrator.load_and_validate_data()
+
+        result = orchestrator.run_agents(parallel=False)
+
+        assert result is True
+        assert orchestrator.status['agents_completed']['metrics'] is True
+        assert orchestrator.status['agents_completed']['visualization'] is True
+        assert orchestrator.status['agents_completed']['recommendations'] is True
+
     def test_metrics_results_structure(self, sample_excel_file):
         """Test that metrics results have correct structure."""
         orchestrator = TestAnalysisOrchestrator(sample_excel_file)
         orchestrator.load_and_validate_data()
-        orchestrator.run_agents_parallel()
+        orchestrator.run_agents()
 
         metrics = orchestrator.metrics_results
 
-        assert 'question_metrics' in metrics
-        assert 'quality_flags' in metrics
-        assert 'difficulty_order' in metrics
-        assert 'curve_breakers' in metrics
         assert 'test_statistics' in metrics
-        assert 'upper_lower_groups' in metrics
+        assert 'question_metrics' in metrics
+
+        # Test statistics should have expected fields
+        test_stats = metrics['test_statistics']
+        assert 'total_students' in test_stats
+        assert 'total_questions' in test_stats
+        assert 'mean_score' in test_stats
+        assert 'cronbach_alpha' in test_stats
+
+    def test_visualization_results_structure(self, sample_excel_file):
+        """Test that visualization results have correct structure."""
+        orchestrator = TestAnalysisOrchestrator(sample_excel_file)
+        orchestrator.load_and_validate_data()
+        orchestrator.run_agents()
+
+        viz = orchestrator.visualization_results
+
+        assert 'plotly_figures' in viz
+        assert 'static_images' in viz
+
+    def test_recommendation_results_structure(self, sample_excel_file):
+        """Test that recommendation results have correct structure."""
+        orchestrator = TestAnalysisOrchestrator(sample_excel_file)
+        orchestrator.load_and_validate_data()
+        orchestrator.run_agents()
+
+        rec = orchestrator.recommendation_results
+
+        assert 'question_analysis' in rec
+        assert 'recommendations' in rec
+        assert 'key_insights' in rec
+        assert 'quality_distribution' in rec
 
     def test_run_agents_before_data_load(self, sample_excel_file):
         """Test that agents can't run before data is loaded."""
         orchestrator = TestAnalysisOrchestrator(sample_excel_file)
         # Don't load data first
 
-        result = orchestrator.run_agents_parallel()
+        result = orchestrator.run_agents()
         assert result is False
 
-
-class TestOrchestratorOutputGeneration:
-    """Test output generation functionality."""
-
-    def test_generate_excel_output(self, sample_excel_file, output_dir):
-        """Test Excel output generation."""
+    def test_timestamp_set_after_agents(self, sample_excel_file):
+        """Test that timestamp is set after agents complete."""
         orchestrator = TestAnalysisOrchestrator(sample_excel_file)
         orchestrator.load_and_validate_data()
-        orchestrator.run_agents_parallel()
+        orchestrator.run_agents()
 
-        output_path = os.path.join(output_dir, "test_output.xlsx")
-        result = orchestrator.generate_excel_output(output_path)
+        assert orchestrator.timestamps['agents_done'] is not None
 
-        assert result is True
-        assert os.path.exists(output_path)
 
-        # Verify file can be read back
-        xl = pd.ExcelFile(output_path)
-        assert 'Raw_Scores' in xl.sheet_names
-        assert 'Question_Metrics' in xl.sheet_names
-        assert 'Test_Statistics' in xl.sheet_names
+class TestOrchestratorAssembly:
+    """Test assembly and output generation."""
 
-    def test_generate_html_report(self, sample_excel_file, output_dir):
-        """Test HTML report generation."""
-        orchestrator = TestAnalysisOrchestrator(sample_excel_file)
+    def test_assemble_final_outputs(self, sample_excel_file, output_dir):
+        """Test final output assembly."""
+        orchestrator = TestAnalysisOrchestrator(sample_excel_file, output_dir=output_dir)
         orchestrator.load_and_validate_data()
-        orchestrator.run_agents_parallel()
+        orchestrator.run_agents()
 
-        output_path = os.path.join(output_dir, "test_report.html")
-        result = orchestrator.generate_html_report(output_path)
+        result = orchestrator.assemble_final_outputs()
 
-        assert result is True
-        assert os.path.exists(output_path)
+        assert result['status'] == 'success'
+        assert 'files' in result
+        assert orchestrator.status['assembly_completed'] is True
 
-        # Verify it's valid HTML
-        with open(output_path, 'r') as f:
-            content = f.read()
-            assert '<!DOCTYPE html>' in content
-            assert '<html>' in content
-            assert 'Test Analysis Report' in content
-
-    def test_generate_summary_text(self, sample_excel_file):
-        """Test summary text generation."""
-        orchestrator = TestAnalysisOrchestrator(sample_excel_file)
+    def test_assemble_creates_files(self, sample_excel_file, output_dir):
+        """Test that assembly creates all expected files."""
+        orchestrator = TestAnalysisOrchestrator(sample_excel_file, output_dir=output_dir)
         orchestrator.load_and_validate_data()
-        orchestrator.run_agents_parallel()
+        orchestrator.run_agents()
 
-        summary = orchestrator.generate_summary_text()
+        result = orchestrator.assemble_final_outputs()
 
-        assert isinstance(summary, str)
-        assert 'TEST ANALYSIS SUMMARY REPORT' in summary
-        assert 'Total Students:' in summary
-        assert 'Total Questions:' in summary
-        assert "Cronbach's Alpha:" in summary
+        files = result['files']
+        assert 'excel' in files
+        assert 'html' in files
+        assert 'summary' in files
 
-    def test_output_before_agents_complete(self, sample_excel_file, output_dir):
-        """Test that output can't be generated before agents complete."""
-        orchestrator = TestAnalysisOrchestrator(sample_excel_file)
+        # Verify files exist
+        assert os.path.exists(files['excel'])
+        assert os.path.exists(files['html'])
+        assert os.path.exists(files['summary'])
+
+    def test_assemble_before_agents_complete(self, sample_excel_file, output_dir):
+        """Test that assembly fails before agents complete."""
+        orchestrator = TestAnalysisOrchestrator(sample_excel_file, output_dir=output_dir)
         orchestrator.load_and_validate_data()
         # Don't run agents
 
-        output_path = os.path.join(output_dir, "test_output.xlsx")
-        result = orchestrator.generate_excel_output(output_path)
+        result = orchestrator.assemble_final_outputs()
 
-        assert result is False
+        assert result['status'] == 'error'
+
+    def test_timestamp_set_after_assembly(self, sample_excel_file, output_dir):
+        """Test that timestamp is set after assembly."""
+        orchestrator = TestAnalysisOrchestrator(sample_excel_file, output_dir=output_dir)
+        orchestrator.load_and_validate_data()
+        orchestrator.run_agents()
+        orchestrator.assemble_final_outputs()
+
+        assert orchestrator.timestamps['assembly_done'] is not None
 
 
 class TestOrchestratorCompleteRun:
@@ -357,8 +438,8 @@ class TestOrchestratorCompleteRun:
 
     def test_complete_run(self, sample_excel_file, output_dir):
         """Test complete analysis pipeline."""
-        orchestrator = TestAnalysisOrchestrator(sample_excel_file)
-        results = orchestrator.run(output_dir)
+        orchestrator = TestAnalysisOrchestrator(sample_excel_file, output_dir=output_dir)
+        results = orchestrator.run()
 
         assert results['success'] is True
         assert 'basic_stats' in results
@@ -366,19 +447,16 @@ class TestOrchestratorCompleteRun:
         assert 'visualization_results' in results
         assert 'recommendation_results' in results
         assert 'output_files' in results
+        assert 'execution_time_seconds' in results
 
         # Verify all output files were created
         for file_type, path in results['output_files'].items():
             assert os.path.exists(path), f"{file_type} file not created"
 
-    def test_complete_run_with_custom_weights(self, sample_excel_file, output_dir):
-        """Test complete run with custom weights."""
-        weights = {'Q1': 2.0, 'Q2': 1.5, 'Q3': 1.0, 'Q4': 1.0, 'Q5': 0.5}
-        orchestrator = TestAnalysisOrchestrator(
-            sample_excel_file,
-            current_weights=weights
-        )
-        results = orchestrator.run(output_dir)
+    def test_complete_run_with_csv(self, sample_csv_file, output_dir):
+        """Test complete run with CSV input."""
+        orchestrator = TestAnalysisOrchestrator(sample_csv_file, output_dir=output_dir)
+        results = orchestrator.run()
 
         assert results['success'] is True
 
@@ -387,22 +465,124 @@ class TestOrchestratorCompleteRun:
         with tempfile.TemporaryDirectory() as tmpdir:
             new_output_dir = os.path.join(tmpdir, "new_dir", "nested")
 
-            orchestrator = TestAnalysisOrchestrator(sample_excel_file)
-            results = orchestrator.run(new_output_dir)
+            orchestrator = TestAnalysisOrchestrator(
+                sample_excel_file,
+                output_dir=new_output_dir
+            )
+            results = orchestrator.run()
 
             assert results['success'] is True
             assert os.path.exists(new_output_dir)
 
+    def test_complete_run_parallel_vs_sequential(self, sample_excel_file, output_dir):
+        """Test that parallel and sequential runs produce same status."""
+        orchestrator1 = TestAnalysisOrchestrator(sample_excel_file, output_dir=output_dir)
+        results1 = orchestrator1.run(parallel=True)
+
+        with tempfile.TemporaryDirectory() as tmpdir2:
+            orchestrator2 = TestAnalysisOrchestrator(sample_excel_file, output_dir=tmpdir2)
+            results2 = orchestrator2.run(parallel=False)
+
+        assert results1['success'] == results2['success']
+        assert results1['status'] == results2['status']
+
     def test_status_tracking(self, sample_excel_file, output_dir):
         """Test that status is properly tracked throughout pipeline."""
-        orchestrator = TestAnalysisOrchestrator(sample_excel_file)
-        results = orchestrator.run(output_dir)
+        orchestrator = TestAnalysisOrchestrator(sample_excel_file, output_dir=output_dir)
+        results = orchestrator.run()
 
         status = results['status']
         assert status['data_loaded'] is True
         assert status['data_validated'] is True
         assert status['data_parsed'] is True
+        assert status['basic_stats_calculated'] is True
         assert status['agents_completed']['metrics'] is True
         assert status['agents_completed']['visualization'] is True
         assert status['agents_completed']['recommendations'] is True
-        assert status['output_generated'] is True
+        assert status['assembly_completed'] is True
+
+    def test_timestamps_all_recorded(self, sample_excel_file, output_dir):
+        """Test that all timestamps are recorded."""
+        orchestrator = TestAnalysisOrchestrator(sample_excel_file, output_dir=output_dir)
+        results = orchestrator.run()
+
+        timestamps = results['timestamps']
+        assert timestamps['start'] is not None
+        assert timestamps['data_ready'] is not None
+        assert timestamps['agents_done'] is not None
+        assert timestamps['assembly_done'] is not None
+
+    def test_execution_time_calculation(self, sample_excel_file, output_dir):
+        """Test that execution time is calculated."""
+        orchestrator = TestAnalysisOrchestrator(sample_excel_file, output_dir=output_dir)
+        results = orchestrator.run()
+
+        assert results['execution_time_seconds'] > 0
+        assert isinstance(results['execution_time_seconds'], float)
+
+
+class TestOrchestratorEdgeCases:
+    """Test edge cases and error handling."""
+
+    def test_empty_data_handling(self):
+        """Test handling of empty or near-empty data."""
+        df = pd.DataFrame({
+            'Student': ['S1'],
+            'Q1': [10]
+        })
+
+        with tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False) as f:
+            temp_path = f.name
+
+        df.to_excel(temp_path, index=False)
+
+        try:
+            orchestrator = TestAnalysisOrchestrator(temp_path)
+            result = orchestrator.load_and_validate_data()
+            assert result is True
+        finally:
+            os.unlink(temp_path)
+
+    def test_all_zeros_data(self):
+        """Test handling of data with all zeros."""
+        df = pd.DataFrame({
+            'Student': ['S1', 'S2'],
+            'Q1': [0, 0],
+            'Q2': [0, 0]
+        })
+
+        with tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False) as f:
+            temp_path = f.name
+
+        df.to_excel(temp_path, index=False)
+
+        try:
+            with tempfile.TemporaryDirectory() as output_dir:
+                orchestrator = TestAnalysisOrchestrator(temp_path, output_dir=output_dir)
+                results = orchestrator.run()
+                # Should still succeed even with zeros
+                assert results['success'] is True
+        finally:
+            os.unlink(temp_path)
+
+    def test_large_number_of_questions(self):
+        """Test handling of many questions."""
+        # Create data with 50 questions
+        data = {'Student': [f'S{i}' for i in range(10)]}
+        for q in range(50):
+            data[f'Q{q+1}'] = np.random.randint(0, 11, 10)
+
+        df = pd.DataFrame(data)
+
+        with tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False) as f:
+            temp_path = f.name
+
+        df.to_excel(temp_path, index=False)
+
+        try:
+            orchestrator = TestAnalysisOrchestrator(temp_path)
+            result = orchestrator.load_and_validate_data()
+            assert result is True
+            assert orchestrator.basic_stats['question_count'] == 50
+        finally:
+            os.unlink(temp_path)
