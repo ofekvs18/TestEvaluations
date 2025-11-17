@@ -17,7 +17,8 @@ The system uses an orchestrator pattern with specialized agents:
 1. **Orchestrator**: Coordinates data loading, validation, and agent execution
 2. **Agent 1 (Metrics Calculator)**: Computes statistical metrics for questions and tests
 3. **Agent 2 (Visualization Generator)**: Creates static and interactive visualizations
-4. **Agent 3 (Recommendation Engine)**: Generates actionable recommendations (stub)
+4. **Agent 3 (Recommendation Engine)**: Generates actionable recommendations
+5. **Assembly Agent**: Combines all outputs into final deliverables (Excel, HTML, text)
 
 ## Agent 2: Visualization Generator
 
@@ -99,6 +100,18 @@ orchestrator = TestAnalysisOrchestrator(
 results = orchestrator.run()
 ```
 
+### Command Line Interface
+
+```bash
+python main.py input_data.xlsx --weights current_weights.csv --output-dir results/
+```
+
+#### CLI Arguments
+
+- `input_data`: Path to input Excel or CSV file containing test responses
+- `--weights`: Optional path to question weights CSV file
+- `--output-dir`: Directory for output files (default: `results/`)
+
 ### Using Individual Agents
 
 ```python
@@ -160,18 +173,20 @@ S002       | 9   | 7   | 8   | 8   | 7
 
 ## Output Files
 
-The orchestrator generates three output files:
+The system generates three output files:
 
 1. **Excel Workbook** (`test_analysis_TIMESTAMP.xlsx`)
    - Raw_Scores sheet
    - Question_Metrics sheet
    - Test_Statistics sheet
    - Quality_Flags sheet
+   - Visualizations sheet (embedded images)
 
 2. **HTML Report** (`test_analysis_TIMESTAMP.html`)
-   - Interactive report with tables and visualizations
+   - Interactive Plotly charts
    - Question quality summary
    - Test statistics overview
+   - Prioritized recommendations
 
 3. **Text Summary** (`test_analysis_TIMESTAMP.txt`)
    - Quick overview of key findings
@@ -196,6 +211,18 @@ The orchestrator generates three output files:
 - Score distribution statistics (mean, median, std dev, skewness, kurtosis)
 - Upper/Lower group cutoffs (27th and 73rd percentiles)
 - Standard Error of Measurement (SEM)
+
+## Dependencies
+
+- openpyxl: Excel file creation and reading
+- pandas: Data manipulation
+- numpy: Numerical computations
+- plotly: Interactive visualizations
+- matplotlib: Static visualizations
+- seaborn: Statistical visualizations
+- kaleido: Plotly image export
+- xlrd: Legacy Excel format support
+- Pillow: Image processing
 
 ## Running Tests
 
@@ -239,11 +266,18 @@ TestEvaluations/
 │   │   └── metrics.py                       # Data models and types
 │   └── utils/
 │       └── colors.py                        # Colorblind-friendly palettes
+├── agents/                                  # Alternative agent implementations
+│   ├── __init__.py
+│   ├── assembly_agent.py                    # Final report assembly
+│   ├── metrics_agent.py                     # Alternative metrics implementation
+│   ├── visualization_agent.py              # Alternative visualization implementation
+│   └── recommendations_agent.py            # Alternative recommendations implementation
 ├── examples/
 │   └── example_usage.py                     # Complete visualization example
 ├── tests/
 │   ├── test_orchestrator.py
 │   └── test_metrics_calculator.py
+├── main.py                                  # CLI entry point
 ├── output/                                  # Generated visualizations
 ├── requirements.txt                         # Python dependencies
 ├── requirements-dev.txt                     # Dev dependencies
@@ -269,8 +303,8 @@ This ensures charts are distinguishable for people with:
 
 ## Future Development
 
-- Full integration of Agent 2 visualizations with orchestrator
-- Complete implementation of Agent 3 (Recommendation Engine)
+- Full integration of Assembly Agent with orchestrator pipeline
+- Complete integration of Agent 2 visualizations with orchestrator
 - Dashboard web interface
 - Additional export formats (PDF, PowerPoint)
 - Batch processing for multiple tests

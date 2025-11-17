@@ -2,11 +2,11 @@
 # Python 3.8+
 
 # Data manipulation
-pandas>=1.5.0
-numpy>=1.21.0
+pandas>=2.0.0
+numpy>=1.24.0
 
 # Excel support
-openpyxl>=3.0.0
+openpyxl>=3.1.0
 xlsxwriter>=3.0.0
 xlrd>=2.0.0
 
@@ -15,7 +15,8 @@ matplotlib>=3.5.0
 seaborn>=0.12.0
 
 # Interactive visualizations (Agent 2)
-plotly>=5.10.0
+plotly>=5.18.0
+kaleido>=0.2.1
 
 # Type hints support
 typing-extensions>=4.0.0
