@@ -161,9 +161,6 @@ class AssemblyAgent:
                     value = ", ".join(str(v) for v in value)
                 ws.cell(row=row_idx, column=col_idx, value=value)
 
-        # Apply conditional formatting for difficulty and discrimination (starting from data rows)
-        self._apply_conditional_formatting(ws, df, header_row)
-
         # Auto-adjust column widths
         self._auto_adjust_columns(ws)
 
