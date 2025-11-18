@@ -601,12 +601,12 @@ class AssemblyAgent:
             if data_end_row >= data_start_row:
                 chart = PieChart()
                 chart.title = f"{question_id} Score Distribution"
-                chart.height = 8   # Height in cm
-                chart.width = 10   # Width in cm
+                chart.height = 6   # Height in cm (smaller)
+                chart.width = 8   # Width in cm (smaller)
 
-                # Data for pie chart: percentages
+                # Data for pie chart: student counts
                 labels = Reference(ws, min_col=1, min_row=data_start_row, max_row=data_end_row)
-                data = Reference(ws, min_col=3, min_row=data_start_row, max_row=data_end_row)
+                data = Reference(ws, min_col=2, min_row=data_start_row, max_row=data_end_row)
 
                 chart.add_data(data, titles_from_data=False)
                 chart.set_categories(labels)
