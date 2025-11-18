@@ -41,10 +41,13 @@ class MetricsAgent:
 
         # Calculate test-level statistics
         total_scores = scores.sum(axis=1)
+        max_possible_score = scores.max(axis=0).sum()  # Sum of max scores per question
+
         test_statistics = {
             "total_students": len(data),
             "total_questions": len(question_cols),
-            "mean_score": float(np.mean(total_scores) / len(question_cols) * 100),
+            "mean_score": float(np.mean(total_scores)),
+            "mean_score_percentage": float(np.mean(total_scores) / max_possible_score * 100) if max_possible_score > 0 else 0.0,
             "std_deviation": float(np.std(total_scores)),
             "min_score": float(np.min(total_scores)),
             "max_score": float(np.max(total_scores)),

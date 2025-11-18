@@ -7,6 +7,8 @@ Creates interactive and static visualizations for test analysis.
 import io
 from typing import Any, Dict, List
 
+import matplotlib
+matplotlib.use('Agg')  # Use non-GUI backend for thread safety
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd

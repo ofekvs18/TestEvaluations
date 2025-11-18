@@ -594,12 +594,16 @@ class AssemblyAgent:
         total_students = test_stats.get("total_students", "N/A")
         total_questions = test_stats.get("total_questions", "N/A")
         mean_score = test_stats.get("mean_score", "N/A")
+        mean_score_pct = test_stats.get("mean_score_percentage", None)
         std_dev = test_stats.get("std_deviation", "N/A")
         reliability = test_stats.get("cronbach_alpha", "N/A")
 
         # Format numeric values
         if isinstance(mean_score, (int, float)):
-            mean_score = f"{mean_score:.2f}%"
+            if mean_score_pct is not None:
+                mean_score = f"{mean_score:.1f} ({mean_score_pct:.1f}%)"
+            else:
+                mean_score = f"{mean_score:.2f}"
         if isinstance(std_dev, (int, float)):
             std_dev = f"{std_dev:.2f}"
         if isinstance(reliability, (int, float)):
@@ -710,12 +714,16 @@ class AssemblyAgent:
         total_students = test_stats.get("total_students", "N/A")
         total_questions = test_stats.get("total_questions", "N/A")
         mean_score = test_stats.get("mean_score", "N/A")
+        mean_score_pct = test_stats.get("mean_score_percentage", None)
         std_dev = test_stats.get("std_deviation", "N/A")
         reliability = test_stats.get("cronbach_alpha", "N/A")
 
         # Format values
         if isinstance(mean_score, (int, float)):
-            mean_score_str = f"{mean_score:.2f}%"
+            if mean_score_pct is not None:
+                mean_score_str = f"{mean_score:.1f} ({mean_score_pct:.1f}%)"
+            else:
+                mean_score_str = f"{mean_score:.2f}"
         else:
             mean_score_str = str(mean_score)
 
@@ -814,8 +822,12 @@ Report generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
         print(f"Questions: {test_stats.get('total_questions', 'N/A')}")
 
         mean_score = test_stats.get("mean_score", "N/A")
+        mean_score_pct = test_stats.get("mean_score_percentage", None)
         if isinstance(mean_score, (int, float)):
-            print(f"Mean Score: {mean_score:.2f}%")
+            if mean_score_pct is not None:
+                print(f"Mean Score: {mean_score:.1f} ({mean_score_pct:.1f}%)")
+            else:
+                print(f"Mean Score: {mean_score:.2f}")
         else:
             print(f"Mean Score: {mean_score}")
 
