@@ -497,6 +497,24 @@ class AssemblyAgent:
 
         current_row += 1  # Add spacing
 
+        # Add quality thresholds
+        ws.cell(row=current_row, column=1, value="Quality Thresholds:")
+        ws.cell(row=current_row, column=1).font = Font(bold=True, size=11)
+        current_row += 1
+
+        thresholds = [
+            ("Discrimination:", "< 0.15 = Poor | 0.15-0.30 = Low | >= 0.30 = Good"),
+            ("Difficulty:", "< 0.20 (too easy) or > 0.80 (too hard) = Poor | 0.20-0.80 = Acceptable | 0.30-0.70 = Ideal"),
+        ]
+
+        for label, value in thresholds:
+            ws.cell(row=current_row, column=1, value=label).font = Font(bold=True)
+            ws.cell(row=current_row, column=2, value=value)
+            ws.merge_cells(start_row=current_row, start_column=2, end_row=current_row, end_column=6)
+            current_row += 1
+
+        current_row += 1  # Add spacing
+
         # Process each question
         for question_id, dist_data in distributions.items():
             # Question header
