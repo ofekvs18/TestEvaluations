@@ -96,16 +96,19 @@ class AssemblyAgent:
         # Sheet 1: Question Analysis
         self._add_question_analysis_sheet(wb, recommendations_output)
 
-        # Sheet 2: Question Rankings
+        # Sheet 2: Classification Decision Logic
+        self._add_classification_breakdown_sheet(wb, recommendations_output)
+
+        # Sheet 3: Question Rankings
         self._add_question_rankings_sheet(wb, recommendations_output)
 
-        # Sheet 3: Distribution Details
+        # Sheet 4: Distribution Details
         self._add_distribution_details_sheet(wb, recommendations_output)
 
-        # Sheet 4: Recommendations
+        # Sheet 5: Recommendations
         self._add_recommendations_sheet(wb, recommendations_output)
 
-        # Sheet 5: Visualizations
+        # Sheet 6: Visualizations
         self._add_visualizations_sheet(wb, visualizations_output)
 
         # Save workbook
@@ -151,6 +154,111 @@ class AssemblyAgent:
 
         # Add filters
         ws.auto_filter.ref = ws.dimensions
+
+    def _add_classification_breakdown_sheet(self, wb: Workbook, recommendations_output: Dict[str, Any]):
+        """Add Classification Decision Logic sheet showing why each question was classified."""
+        ws = wb.create_sheet("Classification Decision Logic")
+
+        # Get question analysis data
+        question_data = recommendations_output.get("question_analysis", [])
+        if not question_data:
+            ws.cell(row=1, column=1, value="No question analysis data available")
+            return
+
+        # Add title
+        title_cell = ws.cell(row=1, column=1, value="Question Classification Decision Breakdown")
+        title_cell.font = Font(bold=True, size=16, color="FFFFFF")
+        title_cell.fill = PatternFill(start_color="2C3E50", end_color="2C3E50", fill_type="solid")
+        ws.merge_cells('A1:D1')
+
+        # Add explanation
+        explanation = ws.cell(row=2, column=1,
+            value="This sheet explains the step-by-step decision logic for classifying each question's quality.")
+        explanation.font = Font(italic=True)
+        ws.merge_cells('A2:D2')
+
+        # Add thresholds reference
+        ws.cell(row=4, column=1, value="Quality Thresholds Reference:")
+        ws.cell(row=4, column=1).font = Font(bold=True, size=12)
+
+        thresholds = [
+            ("Discrimination", "< 0.15 = Poor | 0.15-0.30 = Low | ≥ 0.30 = Good"),
+            ("Difficulty", "< 0.20 or > 0.80 = Poor | 0.20-0.80 = Acceptable | 0.30-0.70 = Ideal"),
+            ("", ""),
+        ]
+
+        current_row = 5
+        for label, value in thresholds:
+            ws.cell(row=current_row, column=1, value=label).font = Font(bold=True)
+            ws.cell(row=current_row, column=2, value=value)
+            current_row += 1
+
+        # Headers for question breakdown
+        current_row += 1
+        headers = ["Question", "Difficulty", "Discrimination", "Quality", "Decision Logic Explanation"]
+        for col_idx, header in enumerate(headers, 1):
+            cell = ws.cell(row=current_row, column=col_idx, value=header)
+            cell.font = Font(bold=True, color="FFFFFF")
+            cell.fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+        current_row += 1
+
+        # Add each question's breakdown
+        for q_data in question_data:
+            question_id = q_data.get("question_id", "N/A")
+            difficulty = q_data.get("difficulty", 0.0)
+            discrimination = q_data.get("discrimination", 0.0)
+            quality = q_data.get("quality", "N/A")
+            explanation = q_data.get("classification_reason", "No explanation available")
+
+            # Question ID
+            ws.cell(row=current_row, column=1, value=question_id)
+
+            # Difficulty with color coding
+            diff_cell = ws.cell(row=current_row, column=2, value=f"{difficulty:.3f}")
+            if difficulty < 0.2 or difficulty > 0.8:
+                diff_cell.fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")  # Red
+            elif 0.3 <= difficulty <= 0.7:
+                diff_cell.fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")  # Green
+            else:
+                diff_cell.fill = PatternFill(start_color="FFEB9C", end_color="FFEB9C", fill_type="solid")  # Yellow
+
+            # Discrimination with color coding
+            disc_cell = ws.cell(row=current_row, column=3, value=f"{discrimination:.3f}")
+            if discrimination < 0.15:
+                disc_cell.fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")  # Red
+            elif discrimination >= 0.3:
+                disc_cell.fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")  # Green
+            else:
+                disc_cell.fill = PatternFill(start_color="FFEB9C", end_color="FFEB9C", fill_type="solid")  # Yellow
+
+            # Quality with color coding
+            quality_cell = ws.cell(row=current_row, column=4, value=quality)
+            quality_cell.font = Font(bold=True)
+            if quality == "Good":
+                quality_cell.fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")  # Green
+            elif quality == "Review":
+                quality_cell.fill = PatternFill(start_color="FFEB9C", end_color="FFEB9C", fill_type="solid")  # Yellow
+            else:
+                quality_cell.fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")  # Red
+
+            # Explanation with word wrap
+            explanation_cell = ws.cell(row=current_row, column=5, value=explanation)
+            explanation_cell.alignment = Alignment(wrap_text=True, vertical="top")
+
+            current_row += 1
+
+        # Set column widths
+        ws.column_dimensions['A'].width = 12
+        ws.column_dimensions['B'].width = 12
+        ws.column_dimensions['C'].width = 15
+        ws.column_dimensions['D'].width = 12
+        ws.column_dimensions['E'].width = 100  # Wide for explanation
+
+        # Set row heights for better readability
+        for row_num in range(9, current_row):
+            ws.row_dimensions[row_num].height = 40
 
     def _add_question_rankings_sheet(self, wb: Workbook, recommendations_output: Dict[str, Any]):
         """Add Question Rankings sheet."""

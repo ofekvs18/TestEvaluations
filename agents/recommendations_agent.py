@@ -84,12 +84,16 @@ class RecommendationsAgent:
             # Generate specific issues
             issues = self._identify_issues(difficulty, discrimination)
 
+            # Generate classification explanation
+            classification_reason = self._explain_classification(difficulty, discrimination, quality)
+
             analysis.append({
                 "question_id": str(col),
                 "difficulty": round(difficulty, 3),
                 "discrimination": round(discrimination, 3),
                 "quality": quality,
                 "issues": issues,
+                "classification_reason": classification_reason,
                 "variance": round(np.var(q_scores), 3)
             })
 
@@ -111,6 +115,45 @@ class RecommendationsAgent:
                 return "Review"
             else:
                 return "Poor"
+
+    def _explain_classification(self, difficulty: float, discrimination: float, quality: str) -> str:
+        """Explain why a question received its quality classification.
+
+        Returns a step-by-step explanation of the decision logic.
+        """
+        explanation_parts = []
+
+        # Step 1: Check discrimination
+        if discrimination < 0:
+            explanation_parts.append(f"❌ Discrimination={discrimination:.3f} (NEGATIVE - question confuses high performers)")
+        elif discrimination < 0.15:
+            explanation_parts.append(f"❌ Discrimination={discrimination:.3f} < 0.15 (VERY POOR - fails to differentiate students)")
+        elif discrimination < 0.3:
+            explanation_parts.append(f"⚠️ Discrimination={discrimination:.3f} is 0.15-0.30 (LOW - weak differentiation)")
+        else:
+            explanation_parts.append(f"✓ Discrimination={discrimination:.3f} ≥ 0.30 (GOOD differentiation)")
+
+        # Step 2: Check difficulty
+        if difficulty < 0.2:
+            explanation_parts.append(f"❌ Difficulty={difficulty:.3f} < 0.20 (TOO HARD - most students fail)")
+        elif difficulty > 0.8:
+            explanation_parts.append(f"❌ Difficulty={difficulty:.3f} > 0.80 (TOO EASY - most students succeed)")
+        elif 0.3 <= difficulty <= 0.7:
+            explanation_parts.append(f"✓ Difficulty={difficulty:.3f} in ideal range 0.30-0.70")
+        elif 0.2 <= difficulty <= 0.8:
+            explanation_parts.append(f"⚠️ Difficulty={difficulty:.3f} in acceptable range 0.20-0.80")
+        else:
+            explanation_parts.append(f"❌ Difficulty={difficulty:.3f} outside acceptable range")
+
+        # Step 3: Final decision
+        if quality == "Good":
+            explanation_parts.append(f"✓ RESULT: GOOD - Both metrics in ideal ranges")
+        elif quality == "Review":
+            explanation_parts.append(f"⚠️ RESULT: NEEDS REVIEW - Metrics marginally acceptable")
+        else:
+            explanation_parts.append(f"❌ RESULT: POOR - One or more metrics below standards")
+
+        return " | ".join(explanation_parts)
 
     def _identify_issues(self, difficulty: float, discrimination: float) -> List[str]:
         """Identify specific issues with a question."""
