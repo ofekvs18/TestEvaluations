@@ -18,6 +18,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.formatting.rule import ColorScaleRule, CellIsRule
 from openpyxl.utils.dataframe import dataframe_to_rows
+from openpyxl.chart import PieChart, Reference
 from openpyxl.drawing.image import Image as XLImage
 
 
@@ -96,16 +97,13 @@ class AssemblyAgent:
         # Sheet 1: Question Analysis
         self._add_question_analysis_sheet(wb, recommendations_output)
 
-        # Sheet 2: Distribution Details
-        self._add_distribution_details_sheet(wb, recommendations_output)
-
-        # Sheet 3: Recommendations
+        # Sheet 2: Recommendations
         self._add_recommendations_sheet(wb, recommendations_output)
 
-        # Sheet 4: Visualizations
+        # Sheet 3: Visualizations
         self._add_visualizations_sheet(wb, visualizations_output)
 
-        # Sheet 5: Question Score Distributions
+        # Sheet 4: Question Score Distributions
         self._add_question_distributions_sheet(wb, visualizations_output)
 
         # Save workbook
@@ -497,7 +495,7 @@ class AssemblyAgent:
             current_row += 2
 
             # Distribution table headers
-            headers = ["Score", "# Students", "Percentage", "Visual"]
+            headers = ["Score", "# Students", "Percentage"]
             for col_idx, header in enumerate(headers, 1):
                 cell = ws.cell(row=current_row, column=col_idx, value=header)
                 cell.font = Font(bold=True)
@@ -505,7 +503,8 @@ class AssemblyAgent:
                 cell.alignment = Alignment(horizontal="center")
             current_row += 1
 
-            # Distribution data
+            # Distribution data - save the starting row for the chart
+            data_start_row = current_row
             score_counts = dist_data.get("score_counts", {})
             score_percentages = dist_data.get("score_percentages", {})
             max_count = max(score_counts.values()) if score_counts else 1
@@ -515,7 +514,7 @@ class AssemblyAgent:
                 percentage = score_percentages.get(score, 0)
 
                 # Score value
-                ws.cell(row=current_row, column=1, value=score).alignment = Alignment(horizontal="center")
+                ws.cell(row=current_row, column=1, value=f"Score {score}").alignment = Alignment(horizontal="center")
 
                 # Student count
                 count_cell = ws.cell(row=current_row, column=2, value=count)
@@ -534,20 +533,35 @@ class AssemblyAgent:
                 pct_cell = ws.cell(row=current_row, column=3, value=f"{percentage:.1f}%")
                 pct_cell.alignment = Alignment(horizontal="center")
 
-                # Visual bar (using | characters)
-                bar_length = int(percentage / 5)  # Scale to max 20 chars
-                visual = "|" * bar_length
-                ws.cell(row=current_row, column=4, value=visual)
-
                 current_row += 1
+
+            # Create pie chart for this question
+            data_end_row = current_row - 1
+
+            if data_end_row >= data_start_row:
+                pie = PieChart()
+                pie.title = f"{question_id} Score Distribution"
+                pie.style = 10
+                pie.height = 10  # Height in cm
+                pie.width = 15   # Width in cm
+
+                # Data for pie chart (student counts)
+                labels = Reference(ws, min_col=1, min_row=data_start_row, max_row=data_end_row)
+                data = Reference(ws, min_col=2, min_row=data_start_row, max_row=data_end_row)
+
+                pie.add_data(data, titles_from_data=False)
+                pie.set_categories(labels)
+
+                # Position chart to the right of the data (column E)
+                chart_anchor = f"E{data_start_row - 5}"
+                ws.add_chart(pie, chart_anchor)
 
             current_row += 2  # Space before next question
 
         # Set column widths
-        ws.column_dimensions['A'].width = 12
+        ws.column_dimensions['A'].width = 15
         ws.column_dimensions['B'].width = 15
         ws.column_dimensions['C'].width = 15
-        ws.column_dimensions['D'].width = 50
 
     def _apply_conditional_formatting(self, ws, df: pd.DataFrame, header_row: int = 1):
         """Apply conditional formatting to metrics."""
