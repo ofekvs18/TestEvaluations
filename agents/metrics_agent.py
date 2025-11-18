@@ -66,8 +66,9 @@ class MetricsAgent:
             if max_score == 0:
                 max_score = 1  # Avoid division by zero
 
-            # Difficulty (proportion correct) - normalized to 0-1 range
-            difficulty = np.mean(q_scores) / max_score
+            # Difficulty (inverted proportion correct) - normalized to 0-1 range
+            # High value = hard question, Low value = easy question
+            difficulty = 1 - (np.mean(q_scores) / max_score)
 
             # Discrimination (point-biserial correlation with total)
             discrimination = self._calculate_discrimination(q_scores, total_scores)

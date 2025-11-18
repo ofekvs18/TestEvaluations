@@ -122,18 +122,23 @@ class AssemblyAgent:
             ws.cell(row=1, column=1, value="No question analysis data available")
             return
 
-        # Add Quality Thresholds Reference at the top
-        ws.cell(row=1, column=1, value="Quality Thresholds Reference:")
+        # Add metric explanations and thresholds at the top
+        ws.cell(row=1, column=1, value="Metrics Explanation:")
         ws.cell(row=1, column=1).font = Font(bold=True, size=12)
 
-        thresholds = [
+        explanations = [
+            ("Difficulty", "How hard the question is (0=very easy, 1=very hard). Higher values mean fewer students answered correctly."),
+            ("Discrimination", "How well the question differentiates between high and low performers. Higher values are better."),
+            ("", ""),  # Blank row
+            ("Quality Thresholds:", ""),
             ("Discrimination", "< 0.15 = Poor | 0.15-0.30 = Low | >= 0.30 = Good"),
-            ("Difficulty", "< 0.20 or > 0.80 = Poor | 0.20-0.80 = Acceptable | 0.30-0.70 = Ideal"),
+            ("Difficulty", "< 0.20 (too easy) or > 0.80 (too hard) = Poor | 0.20-0.80 = Acceptable | 0.30-0.70 = Ideal"),
         ]
 
         current_row = 2
-        for label, value in thresholds:
-            ws.cell(row=current_row, column=1, value=label).font = Font(bold=True)
+        for label, value in explanations:
+            if label:
+                ws.cell(row=current_row, column=1, value=label).font = Font(bold=True)
             ws.cell(row=current_row, column=2, value=value)
             current_row += 1
 

@@ -75,8 +75,9 @@ class RecommendationsAgent:
                 max_score = 1  # Avoid division by zero
 
             # Calculate metrics
-            # Difficulty (proportion correct) - normalized to 0-1 range
-            difficulty = np.mean(q_scores) / max_score
+            # Difficulty (inverted proportion correct) - normalized to 0-1 range
+            # High value = hard question, Low value = easy question
+            difficulty = 1 - (np.mean(q_scores) / max_score)
 
             if np.std(q_scores) == 0:
                 discrimination = 0.0
@@ -139,11 +140,11 @@ class RecommendationsAgent:
         else:
             explanation_parts.append(f"PASS: Discrimination={discrimination:.3f} >= 0.30 (GOOD differentiation)")
 
-        # Step 2: Check difficulty
+        # Step 2: Check difficulty (inverted: high = hard, low = easy)
         if difficulty < 0.2:
-            explanation_parts.append(f"FAIL: Difficulty={difficulty:.3f} < 0.20 (TOO HARD - most students fail)")
+            explanation_parts.append(f"FAIL: Difficulty={difficulty:.3f} < 0.20 (TOO EASY - most students succeed)")
         elif difficulty > 0.8:
-            explanation_parts.append(f"FAIL: Difficulty={difficulty:.3f} > 0.80 (TOO EASY - most students succeed)")
+            explanation_parts.append(f"FAIL: Difficulty={difficulty:.3f} > 0.80 (TOO HARD - most students fail)")
         elif 0.3 <= difficulty <= 0.7:
             explanation_parts.append(f"PASS: Difficulty={difficulty:.3f} in ideal range 0.30-0.70")
         elif 0.2 <= difficulty <= 0.8:
@@ -166,9 +167,9 @@ class RecommendationsAgent:
         issues = []
 
         if difficulty < 0.2:
-            issues.append("Too difficult")
-        elif difficulty > 0.8:
             issues.append("Too easy")
+        elif difficulty > 0.8:
+            issues.append("Too difficult")
 
         if discrimination < 0:
             issues.append("Negative discrimination - consider removing")
@@ -295,22 +296,22 @@ class RecommendationsAgent:
                 "question_ids": [q["question_id"] for q in negative_disc]
             })
 
-        # Check for too easy questions
-        too_easy = [q for q in question_analysis if q["difficulty"] > 0.85]
-        if too_easy:
-            recommendations.append({
-                "priority": "Medium",
-                "recommendation": f"Consider increasing difficulty of {len(too_easy)} questions that are too easy (>85% correct)",
-                "question_ids": [q["question_id"] for q in too_easy]
-            })
-
-        # Check for too hard questions
-        too_hard = [q for q in question_analysis if q["difficulty"] < 0.15]
+        # Check for too hard questions (high difficulty score = hard)
+        too_hard = [q for q in question_analysis if q["difficulty"] > 0.85]
         if too_hard:
             recommendations.append({
                 "priority": "Medium",
                 "recommendation": f"Review {len(too_hard)} questions that may be too difficult (<15% correct)",
                 "question_ids": [q["question_id"] for q in too_hard]
+            })
+
+        # Check for too easy questions (low difficulty score = easy)
+        too_easy = [q for q in question_analysis if q["difficulty"] < 0.15]
+        if too_easy:
+            recommendations.append({
+                "priority": "Medium",
+                "recommendation": f"Consider increasing difficulty of {len(too_easy)} questions that are too easy (>85% correct)",
+                "question_ids": [q["question_id"] for q in too_easy]
             })
 
         # Check for low discrimination
@@ -354,12 +355,12 @@ class RecommendationsAgent:
         good_pct = sum(1 for q in question_analysis if q["quality"] == "Good") / len(question_analysis) * 100
         insights.append(f"{good_pct:.1f}% of questions meet quality standards")
 
-        # Difficulty insights
+        # Difficulty insights (inverted: high = hard, low = easy)
         avg_difficulty = np.mean([q["difficulty"] for q in question_analysis])
         if avg_difficulty < 0.4:
-            insights.append("Test is generally difficult with low average success rate")
-        elif avg_difficulty > 0.7:
             insights.append("Test is generally easy with high average success rate")
+        elif avg_difficulty > 0.7:
+            insights.append("Test is generally difficult with low average success rate")
         else:
             insights.append("Test difficulty is well-balanced overall")
 
