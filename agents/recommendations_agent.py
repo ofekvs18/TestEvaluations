@@ -326,6 +326,35 @@ class RecommendationsAgent:
                 "question_ids": [q["question_id"] for q in low_disc]
             })
 
+        # Check for weight imbalances
+        max_scores = [q["max_score"] for q in question_analysis]
+        if len(max_scores) > 1:
+            max_weight = max(max_scores)
+            min_weight = min(max_scores)
+            mean_weight = np.mean(max_scores)
+            std_weight = np.std(max_scores)
+
+            # Check if weights are highly imbalanced (coefficient of variation > 0.5)
+            if std_weight > 0 and (std_weight / mean_weight) > 0.5:
+                recommendations.append({
+                    "priority": "Medium",
+                    "recommendation": f"Question weights are imbalanced (range: {min_weight}-{max_weight} points). Consider balancing weights to ensure fair assessment.",
+                    "details": f"Weight distribution - Min: {min_weight}, Max: {max_weight}, Mean: {mean_weight:.1f}, Std: {std_weight:.1f}"
+                })
+
+            # Check if any single question dominates the test (>40% of total)
+            total_weight = sum(max_scores)
+            high_weight_questions = [(q["question_id"], q["max_score"])
+                                    for q in question_analysis
+                                    if q["max_score"] / total_weight > 0.4]
+            if high_weight_questions:
+                for qid, weight in high_weight_questions:
+                    recommendations.append({
+                        "priority": "Medium",
+                        "recommendation": f"Question {qid} accounts for {weight/total_weight*100:.1f}% of total points - consider redistributing weights for better balance",
+                        "question_ids": [qid]
+                    })
+
         # General recommendations
         review_questions = [q for q in question_analysis if q["quality"] == "Review"]
         if len(review_questions) > len(question_analysis) * 0.3:
@@ -378,6 +407,18 @@ class RecommendationsAgent:
             insights.append("Wide variation in student scores indicates diverse ability levels")
         else:
             insights.append("Relatively narrow score distribution")
+
+        # Weight insights (auto-detected from student responses)
+        max_scores = [q["max_score"] for q in question_analysis]
+        total_weight = sum(max_scores)
+        mean_weight = np.mean(max_scores)
+        unique_weights = len(set(max_scores))
+
+        if unique_weights == 1:
+            insights.append(f"All questions equally weighted ({int(max_scores[0])} point{'s' if max_scores[0] > 1 else ''} each)")
+        else:
+            weight_range = f"{int(min(max_scores))}-{int(max(max_scores))}"
+            insights.append(f"Question weights vary from {weight_range} points (total: {int(total_weight)} points)")
 
         return insights
 

@@ -15,15 +15,16 @@ class MetricsAgent:
 
     def calculate_metrics(
         self,
-        data: pd.DataFrame,
-        weights: Optional[pd.DataFrame] = None
+        data: pd.DataFrame
     ) -> Dict[str, Any]:
         """
         Calculate comprehensive test metrics.
 
+        Question weights (max possible scores) are automatically determined
+        from the maximum score achieved by any student for each question.
+
         Args:
             data: DataFrame with student responses
-            weights: Optional DataFrame with question weights
 
         Returns:
             Dictionary containing test statistics and question metrics

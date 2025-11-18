@@ -194,6 +194,43 @@ class VisualizationAgent:
         })
         plt.close(fig)
 
+        # Question Weights (Max Scores) Analysis
+        fig, ax = plt.subplots(figsize=(12, 6))
+        max_scores = scores.max(axis=0)
+        question_labels = [str(q) for q in question_cols]
+
+        bars = ax.bar(range(len(question_labels)), max_scores, edgecolor='black', alpha=0.7, color='steelblue')
+        ax.set_title('Question Weights (Maximum Possible Scores)', fontsize=14, fontweight='bold')
+        ax.set_xlabel('Question')
+        ax.set_ylabel('Max Score (Weight)')
+        ax.set_xticks(range(len(question_labels)))
+        ax.set_xticklabels(question_labels, rotation=45, ha='right')
+        ax.grid(True, alpha=0.3, axis='y')
+
+        # Add value labels on bars
+        for i, (bar, score) in enumerate(zip(bars, max_scores)):
+            height = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width()/2., height,
+                   f'{int(score)}',
+                   ha='center', va='bottom', fontsize=9, fontweight='bold')
+
+        # Add summary statistics
+        total_weight = max_scores.sum()
+        mean_weight = max_scores.mean()
+        ax.text(0.02, 0.98, f'Total: {int(total_weight)} points\nMean: {mean_weight:.1f} points',
+               transform=ax.transAxes, verticalalignment='top',
+               bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5),
+               fontsize=10)
+
+        buf = io.BytesIO()
+        fig.savefig(buf, format='png', dpi=150, bbox_inches='tight')
+        buf.seek(0)
+        images.append({
+            "title": "Question Weights Analysis",
+            "image_bytes": buf.getvalue()
+        })
+        plt.close(fig)
+
         # Difficulty-Discrimination Scatter
         fig, ax = plt.subplots(figsize=(10, 8))
         difficulties = np.mean(scores, axis=0)
