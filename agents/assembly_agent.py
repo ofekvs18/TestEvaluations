@@ -475,7 +475,24 @@ class AssemblyAgent:
         explanation.font = Font(italic=True)
         ws.merge_cells('A2:E2')
 
+        # Add metric explanations
         current_row = 4
+        ws.cell(row=current_row, column=1, value="Metrics Explanation:")
+        ws.cell(row=current_row, column=1).font = Font(bold=True, size=11)
+        current_row += 1
+
+        explanations = [
+            ("Difficulty:", "How hard the question is (0=very easy, 1=very hard). Higher values mean fewer students answered correctly."),
+            ("Discrimination:", "How well the question differentiates between high and low performers. Higher values are better."),
+        ]
+
+        for label, value in explanations:
+            ws.cell(row=current_row, column=1, value=label).font = Font(bold=True)
+            ws.cell(row=current_row, column=2, value=value)
+            ws.merge_cells(start_row=current_row, start_column=2, end_row=current_row, end_column=6)
+            current_row += 1
+
+        current_row += 1  # Add spacing
 
         # Process each question
         for question_id, dist_data in distributions.items():
