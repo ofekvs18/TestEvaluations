@@ -526,11 +526,28 @@ class AssemblyAgent:
             ws.cell(row=current_row, column=4, value=f"{dist_data.get('std_dev', 0):.2f}")
             current_row += 1
 
-            # Statistics summary - Row 3 (new - difficulty and discrimination)
+            # Statistics summary - Row 3 (difficulty and discrimination)
             ws.cell(row=current_row, column=1, value="Difficulty:").font = Font(bold=True)
             ws.cell(row=current_row, column=2, value=f"{difficulty:.3f}")
             ws.cell(row=current_row, column=3, value="Discrimination:").font = Font(bold=True)
             ws.cell(row=current_row, column=4, value=f"{discrimination:.3f}")
+            current_row += 1
+
+            # Statistics summary - Row 4 (issues)
+            issues = metrics.get("issues", [])
+            issues_text = ", ".join(issues) if issues else "No issues"
+            ws.cell(row=current_row, column=1, value="Issues:").font = Font(bold=True)
+            issues_cell = ws.cell(row=current_row, column=2, value=issues_text)
+            ws.merge_cells(start_row=current_row, start_column=2, end_row=current_row, end_column=6)
+
+            # Color code based on issues
+            if any(keyword in issues_text.lower() for keyword in ["negative", "very poor", "too difficult", "too easy"]):
+                issues_cell.font = Font(color="C00000")  # Red for serious issues
+            elif "no" in issues_text.lower() and "issues" in issues_text.lower():
+                issues_cell.font = Font(color="00B050")  # Green for no issues
+            else:
+                issues_cell.font = Font(color="FF9900")  # Orange for minor issues
+
             current_row += 2
 
             # Distribution table headers
