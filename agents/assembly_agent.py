@@ -21,6 +21,7 @@ from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl.chart import PieChart, BarChart, Reference
 from openpyxl.chart.series import DataPoint
 from openpyxl.chart.shapes import GraphicalProperties
+from openpyxl.chart.label import DataLabelList
 from openpyxl.drawing.image import Image as XLImage
 from openpyxl.drawing.fill import SolidColorFillProperties, ColorChoice
 
@@ -646,7 +647,10 @@ class AssemblyAgent:
                     chart.series[0].data_points.append(pt)
 
                 # Show percentages on the chart
-                chart.series[0].dLbls = chart.series[0].dLbls or {}
+                dLbls = DataLabelList()
+                dLbls.showPercent = True
+                dLbls.showVal = False
+                chart.series[0].dLbls = dLbls
 
                 # Position chart to the right of the data (column E)
                 chart_anchor = f"E{data_start_row - 5}"
