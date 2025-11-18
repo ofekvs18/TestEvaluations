@@ -592,6 +592,10 @@ class AssemblyAgent:
                 chart.y_axis.majorGridlines = None
                 chart.x_axis.majorGridlines = None
 
+                # Show axis lines
+                chart.x_axis.delete = False
+                chart.y_axis.delete = False
+
                 # Ensure axis values are visible
                 chart.x_axis.tickLblPos = "low"
                 chart.y_axis.tickLblPos = "low"
