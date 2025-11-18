@@ -97,16 +97,10 @@ class AssemblyAgent:
         # Remove default sheet
         wb.remove(wb.active)
 
-        # Sheet 1: Question Analysis
-        self._add_question_analysis_sheet(wb, recommendations_output)
+        # Sheet 1: Analysis & Recommendations (combined Visualizations and Recommendations)
+        self._add_analysis_recommendations_sheet(wb, visualizations_output, recommendations_output)
 
-        # Sheet 2: Recommendations
-        self._add_recommendations_sheet(wb, recommendations_output)
-
-        # Sheet 3: Visualizations
-        self._add_visualizations_sheet(wb, visualizations_output)
-
-        # Sheet 4: Question Score Distributions
+        # Sheet 2: Detailed Question Analysis (formerly Question Score Distributions)
         self._add_question_distributions_sheet(wb, visualizations_output, recommendations_output)
 
         # Save workbook
@@ -362,6 +356,98 @@ class AssemblyAgent:
 
         self._auto_adjust_columns(ws)
 
+    def _add_analysis_recommendations_sheet(self, wb: Workbook, visualizations_output: Dict[str, Any], recommendations_output: Dict[str, Any]):
+        """Add combined Analysis & Recommendations sheet with visualizations and recommendations."""
+        ws = wb.create_sheet("Analysis & Recommendations")
+
+        current_row = 1
+
+        # Section 1: Visualizations
+        static_images = visualizations_output.get("static_images", [])
+        if static_images:
+            # Visualizations header
+            cell = ws.cell(row=current_row, column=1, value="Test Analysis Visualizations")
+            cell.font = Font(bold=True, size=16, color="FFFFFF")
+            cell.fill = PatternFill(start_color="2C3E50", end_color="2C3E50", fill_type="solid")
+            current_row += 2
+
+            for img_data in static_images:
+                if isinstance(img_data, dict):
+                    # Add title
+                    title = img_data.get("title", "Visualization")
+                    cell = ws.cell(row=current_row, column=1, value=title)
+                    cell.font = Font(bold=True, size=12)
+                    current_row += 2
+
+                    # Add image
+                    img_bytes = img_data.get("image_bytes")
+                    if img_bytes:
+                        try:
+                            # Create image from bytes
+                            img_stream = io.BytesIO(img_bytes)
+                            xl_img = XLImage(img_stream)
+
+                            # Resize if needed
+                            xl_img.width = min(xl_img.width, 800)
+                            xl_img.height = min(xl_img.height, 600)
+
+                            # Add to worksheet
+                            ws.add_image(xl_img, f"A{current_row}")
+
+                            # Move down to accommodate image
+                            current_row += int(xl_img.height / 15) + 5
+                        except Exception as e:
+                            ws.cell(row=current_row, column=1, value=f"Error loading image: {str(e)}")
+                            current_row += 2
+
+                current_row += 2
+
+        # Section 2: Recommendations
+        recommendations = recommendations_output.get("recommendations", [])
+        if recommendations:
+            # Add spacing between sections
+            current_row += 2
+
+            # Recommendations header
+            cell = ws.cell(row=current_row, column=1, value="Test Improvement Recommendations")
+            cell.font = Font(bold=True, size=16, color="FFFFFF")
+            cell.fill = PatternFill(start_color="2C3E50", end_color="2C3E50", fill_type="solid")
+            current_row += 2
+
+            if isinstance(recommendations, list):
+                for idx, rec in enumerate(recommendations, 1):
+                    if isinstance(rec, dict):
+                        # Priority
+                        priority = rec.get("priority", "Medium")
+                        priority_cell = ws.cell(row=current_row, column=1, value=f"Priority: {priority}")
+
+                        # Color code by priority
+                        if priority.lower() == "high":
+                            priority_cell.font = Font(color="FF0000", bold=True)
+                        elif priority.lower() == "medium":
+                            priority_cell.font = Font(color="FFA500", bold=True)
+                        else:
+                            priority_cell.font = Font(color="008000", bold=True)
+
+                        current_row += 1
+
+                        # Recommendation text
+                        rec_text = rec.get("recommendation", rec.get("text", str(rec)))
+                        ws.cell(row=current_row, column=1, value=rec_text)
+                        current_row += 1
+
+                        # Question IDs if available
+                        if "question_ids" in rec:
+                            ws.cell(row=current_row, column=1, value=f"Affected Questions: {', '.join(map(str, rec['question_ids']))}")
+                            current_row += 1
+
+                        current_row += 1  # Empty row
+                    else:
+                        ws.cell(row=current_row, column=1, value=str(rec))
+                        current_row += 1
+
+        self._auto_adjust_columns(ws)
+
     def _add_recommendations_sheet(self, wb: Workbook, recommendations_output: Dict[str, Any]):
         """Add Recommendations sheet."""
         ws = wb.create_sheet("Recommendations")
@@ -454,8 +540,8 @@ class AssemblyAgent:
             current_row += 2
 
     def _add_question_distributions_sheet(self, wb: Workbook, visualizations_output: Dict[str, Any], recommendations_output: Dict[str, Any]):
-        """Add Question Score Distributions sheet showing how many students got each score."""
-        ws = wb.create_sheet("Question Score Distributions")
+        """Add Detailed Question Analysis sheet showing how many students got each score."""
+        ws = wb.create_sheet("Detailed Question Analysis")
 
         distributions = visualizations_output.get("question_distributions", {})
         if not distributions:
@@ -467,14 +553,14 @@ class AssemblyAgent:
         question_metrics = {q["question_id"]: q for q in question_analysis}
 
         # Add title
-        title_cell = ws.cell(row=1, column=1, value="Per-Question Score Distribution")
+        title_cell = ws.cell(row=1, column=1, value="Detailed Question Analysis")
         title_cell.font = Font(bold=True, size=16, color="FFFFFF")
         title_cell.fill = PatternFill(start_color="2C3E50", end_color="2C3E50", fill_type="solid")
         ws.merge_cells('A1:E1')
 
         # Add explanation
         explanation = ws.cell(row=2, column=1,
-            value="Shows how many students achieved each possible score for each question.")
+            value="Shows detailed metrics, issues, and score distribution for each question with visual charts.")
         explanation.font = Font(italic=True)
         ws.merge_cells('A2:E2')
 
