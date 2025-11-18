@@ -566,6 +566,14 @@ class AssemblyAgent:
                 chart.x_axis.title = "Score"
                 chart.y_axis.title = "Number of Students"
 
+                # Remove gridlines for cleaner appearance
+                chart.y_axis.majorGridlines = None
+                chart.x_axis.majorGridlines = None
+
+                # Ensure axis values are visible
+                chart.x_axis.tickLblPos = "low"
+                chart.y_axis.tickLblPos = "low"
+
                 # Data for bar chart: X-axis = scores (labels), Y-axis = student counts
                 labels = Reference(ws, min_col=1, min_row=data_start_row, max_row=data_end_row)
                 data = Reference(ws, min_col=2, min_row=data_start_row, max_row=data_end_row)
