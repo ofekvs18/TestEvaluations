@@ -18,7 +18,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.formatting.rule import ColorScaleRule, CellIsRule
 from openpyxl.utils.dataframe import dataframe_to_rows
-from openpyxl.chart import PieChart, Reference
+from openpyxl.chart import PieChart, BarChart, Reference
 from openpyxl.drawing.image import Image as XLImage
 
 
@@ -104,7 +104,7 @@ class AssemblyAgent:
         self._add_visualizations_sheet(wb, visualizations_output)
 
         # Sheet 4: Question Score Distributions
-        self._add_question_distributions_sheet(wb, visualizations_output)
+        self._add_question_distributions_sheet(wb, visualizations_output, recommendations_output)
 
         # Save workbook
         output_path = self.output_dir / f"{base_name}_analysis.xlsx"
@@ -445,7 +445,7 @@ class AssemblyAgent:
 
             current_row += 2
 
-    def _add_question_distributions_sheet(self, wb: Workbook, visualizations_output: Dict[str, Any]):
+    def _add_question_distributions_sheet(self, wb: Workbook, visualizations_output: Dict[str, Any], recommendations_output: Dict[str, Any]):
         """Add Question Score Distributions sheet showing how many students got each score."""
         ws = wb.create_sheet("Question Score Distributions")
 
@@ -453,6 +453,10 @@ class AssemblyAgent:
         if not distributions:
             ws.cell(row=1, column=1, value="No distribution data available")
             return
+
+        # Get question analysis for difficulty and discrimination metrics
+        question_analysis = recommendations_output.get("question_analysis", [])
+        question_metrics = {q["question_id"]: q for q in question_analysis}
 
         # Add title
         title_cell = ws.cell(row=1, column=1, value="Per-Question Score Distribution")
@@ -477,18 +481,34 @@ class AssemblyAgent:
             ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=5)
             current_row += 1
 
-            # Statistics summary
+            # Get metrics for this question
+            metrics = question_metrics.get(question_id, {})
+            difficulty = metrics.get("difficulty", 0)
+            discrimination = metrics.get("discrimination", 0)
+            quality = metrics.get("quality", "N/A")
+
+            # Statistics summary - Row 1
             stats_row = current_row
             ws.cell(row=stats_row, column=1, value="Max Score:").font = Font(bold=True)
             ws.cell(row=stats_row, column=2, value=dist_data.get("max_score", 0))
             ws.cell(row=stats_row, column=3, value="Mean:").font = Font(bold=True)
             ws.cell(row=stats_row, column=4, value=f"{dist_data.get('mean_score', 0):.2f}")
+            ws.cell(row=stats_row, column=5, value="Quality:").font = Font(bold=True)
+            ws.cell(row=stats_row, column=6, value=quality)
             current_row += 1
 
+            # Statistics summary - Row 2
             ws.cell(row=current_row, column=1, value="Total Students:").font = Font(bold=True)
             ws.cell(row=current_row, column=2, value=dist_data.get("total_students", 0))
             ws.cell(row=current_row, column=3, value="Std Dev:").font = Font(bold=True)
             ws.cell(row=current_row, column=4, value=f"{dist_data.get('std_dev', 0):.2f}")
+            current_row += 1
+
+            # Statistics summary - Row 3 (new - difficulty and discrimination)
+            ws.cell(row=current_row, column=1, value="Difficulty:").font = Font(bold=True)
+            ws.cell(row=current_row, column=2, value=f"{difficulty:.3f}")
+            ws.cell(row=current_row, column=3, value="Discrimination:").font = Font(bold=True)
+            ws.cell(row=current_row, column=4, value=f"{discrimination:.3f}")
             current_row += 2
 
             # Distribution table headers
@@ -532,26 +552,33 @@ class AssemblyAgent:
 
                 current_row += 1
 
-            # Create pie chart for this question
+            # Create bar chart for this question
             data_end_row = current_row - 1
 
             if data_end_row >= data_start_row:
-                pie = PieChart()
-                pie.title = f"{question_id} Score Distribution"
-                pie.style = 10
-                pie.height = 10  # Height in cm
-                pie.width = 15   # Width in cm
+                chart = BarChart()
+                chart.title = f"{question_id} Score Distribution"
+                chart.style = 10
+                chart.height = 7   # Height in cm
+                chart.width = 12   # Width in cm (slightly wider for bar chart)
 
-                # Data for pie chart (student counts)
+                # Set axis titles
+                chart.x_axis.title = "Score"
+                chart.y_axis.title = "Number of Students"
+
+                # Data for bar chart: X-axis = scores (labels), Y-axis = student counts
                 labels = Reference(ws, min_col=1, min_row=data_start_row, max_row=data_end_row)
                 data = Reference(ws, min_col=2, min_row=data_start_row, max_row=data_end_row)
 
-                pie.add_data(data, titles_from_data=False)
-                pie.set_categories(labels)
+                chart.add_data(data, titles_from_data=False)
+                chart.set_categories(labels)
+
+                # Customize appearance
+                chart.legend = None  # Remove legend since it's not needed for single series
 
                 # Position chart to the right of the data (column E)
                 chart_anchor = f"E{data_start_row - 5}"
-                ws.add_chart(pie, chart_anchor)
+                ws.add_chart(chart, chart_anchor)
 
             current_row += 2  # Space before next question
 
