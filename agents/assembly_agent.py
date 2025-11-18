@@ -19,7 +19,9 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.formatting.rule import ColorScaleRule, CellIsRule
 from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl.chart import PieChart, BarChart, Reference
+from openpyxl.chart.series import DataPoint
 from openpyxl.drawing.image import Image as XLImage
+from openpyxl.drawing.fill import SolidColorFillProperties, ColorChoice
 
 
 class AssemblyAgent:
@@ -592,41 +594,55 @@ class AssemblyAgent:
 
                 current_row += 1
 
-            # Create bar chart for this question
+            # Create pie chart for this question
             data_end_row = current_row - 1
 
             if data_end_row >= data_start_row:
-                chart = BarChart()
+                chart = PieChart()
                 chart.title = f"{question_id} Score Distribution"
-                chart.style = 10
-                chart.height = 5   # Height in cm (smaller)
-                chart.width = 10   # Width in cm (smaller)
+                chart.height = 8   # Height in cm
+                chart.width = 10   # Width in cm
 
-                # Set axis titles
-                chart.x_axis.title = "Score"
-                chart.y_axis.title = "Percentage of Students (%)"
-
-                # Remove gridlines for cleaner appearance
-                chart.y_axis.majorGridlines = None
-                chart.x_axis.majorGridlines = None
-
-                # Show axis lines
-                chart.x_axis.delete = False
-                chart.y_axis.delete = False
-
-                # Ensure axis values are visible
-                chart.x_axis.tickLblPos = "low"
-                chart.y_axis.tickLblPos = "low"
-
-                # Data for bar chart: X-axis = scores (labels), Y-axis = percentages
+                # Data for pie chart: percentages
                 labels = Reference(ws, min_col=1, min_row=data_start_row, max_row=data_end_row)
                 data = Reference(ws, min_col=3, min_row=data_start_row, max_row=data_end_row)
 
                 chart.add_data(data, titles_from_data=False)
                 chart.set_categories(labels)
 
-                # Customize appearance
-                chart.legend = None  # Remove legend since it's not needed for single series
+                # Apply gradient colors from red (low scores) to green (high scores)
+                max_score = dist_data.get("max_score", 1)
+                num_slices = data_end_row - data_start_row + 1
+
+                # Create gradient colors
+                for idx in range(num_slices):
+                    # Calculate color based on position (0 = red, max = green)
+                    ratio = idx / max(1, max_score)
+
+                    # RGB gradient: Red -> Yellow -> Green
+                    if ratio < 0.5:
+                        # Red to Yellow (decrease blue, increase green)
+                        r = 255
+                        g = int(255 * (ratio * 2))
+                        b = 0
+                    else:
+                        # Yellow to Green (decrease red, keep green high)
+                        r = int(255 * (1 - (ratio - 0.5) * 2))
+                        g = 255
+                        b = 0
+
+                    # Convert to hex color
+                    color_hex = f"{r:02X}{g:02X}{b:02X}"
+
+                    # Create data point with color
+                    pt = DataPoint(idx=idx)
+                    fill_props = SolidColorFillProperties()
+                    fill_props.solidFill = ColorChoice(srgbClr=color_hex)
+                    pt.graphicalProperties = fill_props
+                    chart.series[0].data_points.append(pt)
+
+                # Show percentages on the chart
+                chart.series[0].dLbls = chart.series[0].dLbls or {}
 
                 # Position chart to the right of the data (column E)
                 chart_anchor = f"E{data_start_row - 5}"
