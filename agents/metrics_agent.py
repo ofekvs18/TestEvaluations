@@ -61,8 +61,13 @@ class MetricsAgent:
         for idx, col in enumerate(question_cols):
             q_scores = scores[:, idx]
 
-            # Difficulty (proportion correct)
-            difficulty = np.mean(q_scores)
+            # Get max possible score for this question
+            max_score = np.max(q_scores)
+            if max_score == 0:
+                max_score = 1  # Avoid division by zero
+
+            # Difficulty (proportion correct) - normalized to 0-1 range
+            difficulty = np.mean(q_scores) / max_score
 
             # Discrimination (point-biserial correlation with total)
             discrimination = self._calculate_discrimination(q_scores, total_scores)
@@ -72,7 +77,8 @@ class MetricsAgent:
                 "difficulty": float(difficulty),
                 "discrimination": float(discrimination),
                 "variance": float(np.var(q_scores)),
-                "mean": float(np.mean(q_scores))
+                "mean": float(np.mean(q_scores)),
+                "max_score": float(max_score)
             })
 
         return {

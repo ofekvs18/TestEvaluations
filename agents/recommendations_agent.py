@@ -69,8 +69,14 @@ class RecommendationsAgent:
         for idx, col in enumerate(question_cols):
             q_scores = scores[:, idx]
 
+            # Get max possible score for this question
+            max_score = np.max(q_scores)
+            if max_score == 0:
+                max_score = 1  # Avoid division by zero
+
             # Calculate metrics
-            difficulty = np.mean(q_scores)
+            # Difficulty (proportion correct) - normalized to 0-1 range
+            difficulty = np.mean(q_scores) / max_score
 
             if np.std(q_scores) == 0:
                 discrimination = 0.0
