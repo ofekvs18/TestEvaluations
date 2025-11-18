@@ -585,8 +585,9 @@ class AssemblyAgent:
                         fill_type="solid"
                     )
 
-                # Percentage
-                pct_cell = ws.cell(row=current_row, column=3, value=f"{percentage:.1f}%")
+                # Percentage (store as numeric value for charting)
+                pct_cell = ws.cell(row=current_row, column=3, value=percentage)
+                pct_cell.number_format = '0.0"%"'  # Display as percentage with 1 decimal
                 pct_cell.alignment = Alignment(horizontal="center")
 
                 current_row += 1
@@ -598,12 +599,12 @@ class AssemblyAgent:
                 chart = BarChart()
                 chart.title = f"{question_id} Score Distribution"
                 chart.style = 10
-                chart.height = 7   # Height in cm
-                chart.width = 12   # Width in cm (slightly wider for bar chart)
+                chart.height = 5   # Height in cm (smaller)
+                chart.width = 10   # Width in cm (smaller)
 
                 # Set axis titles
                 chart.x_axis.title = "Score"
-                chart.y_axis.title = "Number of Students"
+                chart.y_axis.title = "Percentage of Students (%)"
 
                 # Remove gridlines for cleaner appearance
                 chart.y_axis.majorGridlines = None
@@ -617,9 +618,9 @@ class AssemblyAgent:
                 chart.x_axis.tickLblPos = "low"
                 chart.y_axis.tickLblPos = "low"
 
-                # Data for bar chart: X-axis = scores (labels), Y-axis = student counts
+                # Data for bar chart: X-axis = scores (labels), Y-axis = percentages
                 labels = Reference(ws, min_col=1, min_row=data_start_row, max_row=data_end_row)
-                data = Reference(ws, min_col=2, min_row=data_start_row, max_row=data_end_row)
+                data = Reference(ws, min_col=3, min_row=data_start_row, max_row=data_end_row)
 
                 chart.add_data(data, titles_from_data=False)
                 chart.set_categories(labels)
