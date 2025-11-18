@@ -20,6 +20,7 @@ from openpyxl.formatting.rule import ColorScaleRule, CellIsRule
 from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl.chart import PieChart, BarChart, Reference
 from openpyxl.chart.series import DataPoint
+from openpyxl.chart.shapes import GraphicalProperties
 from openpyxl.drawing.image import Image as XLImage
 from openpyxl.drawing.fill import SolidColorFillProperties, ColorChoice
 
@@ -636,9 +637,12 @@ class AssemblyAgent:
 
                     # Create data point with color
                     pt = DataPoint(idx=idx)
-                    fill_props = SolidColorFillProperties()
-                    fill_props.solidFill = ColorChoice(srgbClr=color_hex)
-                    pt.graphicalProperties = fill_props
+
+                    # Create graphical properties with solid fill
+                    gp = GraphicalProperties()
+                    gp.solidFill = ColorChoice(srgbClr=color_hex)
+                    pt.graphicalProperties = gp
+
                     chart.series[0].data_points.append(pt)
 
                 # Show percentages on the chart
