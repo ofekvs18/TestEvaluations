@@ -96,22 +96,16 @@ class AssemblyAgent:
         # Sheet 1: Question Analysis
         self._add_question_analysis_sheet(wb, recommendations_output)
 
-        # Sheet 2: Classification Decision Logic
-        self._add_classification_breakdown_sheet(wb, recommendations_output)
-
-        # Sheet 3: Question Rankings
-        self._add_question_rankings_sheet(wb, recommendations_output)
-
-        # Sheet 4: Distribution Details
+        # Sheet 2: Distribution Details
         self._add_distribution_details_sheet(wb, recommendations_output)
 
-        # Sheet 5: Recommendations
+        # Sheet 3: Recommendations
         self._add_recommendations_sheet(wb, recommendations_output)
 
-        # Sheet 6: Visualizations
+        # Sheet 4: Visualizations
         self._add_visualizations_sheet(wb, visualizations_output)
 
-        # Sheet 7: Question Score Distributions
+        # Sheet 5: Question Score Distributions
         self._add_question_distributions_sheet(wb, visualizations_output)
 
         # Save workbook
@@ -130,33 +124,53 @@ class AssemblyAgent:
             ws.cell(row=1, column=1, value="No question analysis data available")
             return
 
+        # Add Quality Thresholds Reference at the top
+        ws.cell(row=1, column=1, value="Quality Thresholds Reference:")
+        ws.cell(row=1, column=1).font = Font(bold=True, size=12)
+
+        thresholds = [
+            ("Discrimination", "< 0.15 = Poor | 0.15-0.30 = Low | >= 0.30 = Good"),
+            ("Difficulty", "< 0.20 or > 0.80 = Poor | 0.20-0.80 = Acceptable | 0.30-0.70 = Ideal"),
+        ]
+
+        current_row = 2
+        for label, value in thresholds:
+            ws.cell(row=current_row, column=1, value=label).font = Font(bold=True)
+            ws.cell(row=current_row, column=2, value=value)
+            current_row += 1
+
+        # Add spacing
+        current_row += 1
+
         # Convert to DataFrame for easier handling
         df = pd.DataFrame(question_data)
 
         # Write headers
         headers = list(df.columns)
+        header_row = current_row
         for col_idx, header in enumerate(headers, 1):
-            cell = ws.cell(row=1, column=col_idx, value=header)
+            cell = ws.cell(row=header_row, column=col_idx, value=header)
             cell.font = Font(bold=True, color="FFFFFF")
             cell.fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
             cell.alignment = Alignment(horizontal="center", vertical="center")
 
         # Write data
-        for row_idx, row in enumerate(df.itertuples(index=False), 2):
+        data_start_row = header_row + 1
+        for row_idx, row in enumerate(df.itertuples(index=False), data_start_row):
             for col_idx, value in enumerate(row, 1):
                 # Convert lists to comma-separated strings for Excel compatibility
                 if isinstance(value, list):
                     value = ", ".join(str(v) for v in value)
                 ws.cell(row=row_idx, column=col_idx, value=value)
 
-        # Apply conditional formatting for difficulty and discrimination
-        self._apply_conditional_formatting(ws, df)
+        # Apply conditional formatting for difficulty and discrimination (starting from data rows)
+        self._apply_conditional_formatting(ws, df, header_row)
 
         # Auto-adjust column widths
         self._auto_adjust_columns(ws)
 
-        # Add filters
-        ws.auto_filter.ref = ws.dimensions
+        # Add filters (from header row to end)
+        ws.auto_filter.ref = f"A{header_row}:{ws.dimensions.split(':')[1]}"
 
     def _add_classification_breakdown_sheet(self, wb: Workbook, recommendations_output: Dict[str, Any]):
         """Add Classification Decision Logic sheet showing why each question was classified."""
@@ -520,9 +534,9 @@ class AssemblyAgent:
                 pct_cell = ws.cell(row=current_row, column=3, value=f"{percentage:.1f}%")
                 pct_cell.alignment = Alignment(horizontal="center")
 
-                # Visual bar (using █ characters)
+                # Visual bar (using | characters)
                 bar_length = int(percentage / 5)  # Scale to max 20 chars
-                visual = "█" * bar_length
+                visual = "|" * bar_length
                 ws.cell(row=current_row, column=4, value=visual)
 
                 current_row += 1
@@ -535,16 +549,19 @@ class AssemblyAgent:
         ws.column_dimensions['C'].width = 15
         ws.column_dimensions['D'].width = 50
 
-    def _apply_conditional_formatting(self, ws, df: pd.DataFrame):
+    def _apply_conditional_formatting(self, ws, df: pd.DataFrame, header_row: int = 1):
         """Apply conditional formatting to metrics."""
         # Find difficulty and discrimination columns
+        data_start_row = header_row + 1
+        data_end_row = header_row + len(df)
+
         for col_idx, col_name in enumerate(df.columns, 1):
-            col_letter = ws.cell(row=1, column=col_idx).column_letter
+            col_letter = ws.cell(row=header_row, column=col_idx).column_letter
 
             if "difficulty" in col_name.lower():
                 # Color scale for difficulty (0.3-0.7 is ideal)
                 ws.conditional_formatting.add(
-                    f"{col_letter}2:{col_letter}{len(df) + 1}",
+                    f"{col_letter}{data_start_row}:{col_letter}{data_end_row}",
                     ColorScaleRule(
                         start_type="num", start_value=0, start_color="FF0000",
                         mid_type="num", mid_value=0.5, mid_color="00FF00",
@@ -555,7 +572,7 @@ class AssemblyAgent:
             elif "discrimination" in col_name.lower():
                 # Color scale for discrimination (higher is better)
                 ws.conditional_formatting.add(
-                    f"{col_letter}2:{col_letter}{len(df) + 1}",
+                    f"{col_letter}{data_start_row}:{col_letter}{data_end_row}",
                     ColorScaleRule(
                         start_type="num", start_value=0, start_color="FF0000",
                         mid_type="num", mid_value=0.3, mid_color="FFFF00",

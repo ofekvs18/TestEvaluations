@@ -131,33 +131,33 @@ class RecommendationsAgent:
 
         # Step 1: Check discrimination
         if discrimination < 0:
-            explanation_parts.append(f"❌ Discrimination={discrimination:.3f} (NEGATIVE - question confuses high performers)")
+            explanation_parts.append(f"FAIL: Discrimination={discrimination:.3f} (NEGATIVE - question confuses high performers)")
         elif discrimination < 0.15:
-            explanation_parts.append(f"❌ Discrimination={discrimination:.3f} < 0.15 (VERY POOR - fails to differentiate students)")
+            explanation_parts.append(f"FAIL: Discrimination={discrimination:.3f} < 0.15 (VERY POOR - fails to differentiate students)")
         elif discrimination < 0.3:
-            explanation_parts.append(f"⚠️ Discrimination={discrimination:.3f} is 0.15-0.30 (LOW - weak differentiation)")
+            explanation_parts.append(f"WARN: Discrimination={discrimination:.3f} is 0.15-0.30 (LOW - weak differentiation)")
         else:
-            explanation_parts.append(f"✓ Discrimination={discrimination:.3f} ≥ 0.30 (GOOD differentiation)")
+            explanation_parts.append(f"PASS: Discrimination={discrimination:.3f} >= 0.30 (GOOD differentiation)")
 
         # Step 2: Check difficulty
         if difficulty < 0.2:
-            explanation_parts.append(f"❌ Difficulty={difficulty:.3f} < 0.20 (TOO HARD - most students fail)")
+            explanation_parts.append(f"FAIL: Difficulty={difficulty:.3f} < 0.20 (TOO HARD - most students fail)")
         elif difficulty > 0.8:
-            explanation_parts.append(f"❌ Difficulty={difficulty:.3f} > 0.80 (TOO EASY - most students succeed)")
+            explanation_parts.append(f"FAIL: Difficulty={difficulty:.3f} > 0.80 (TOO EASY - most students succeed)")
         elif 0.3 <= difficulty <= 0.7:
-            explanation_parts.append(f"✓ Difficulty={difficulty:.3f} in ideal range 0.30-0.70")
+            explanation_parts.append(f"PASS: Difficulty={difficulty:.3f} in ideal range 0.30-0.70")
         elif 0.2 <= difficulty <= 0.8:
-            explanation_parts.append(f"⚠️ Difficulty={difficulty:.3f} in acceptable range 0.20-0.80")
+            explanation_parts.append(f"WARN: Difficulty={difficulty:.3f} in acceptable range 0.20-0.80")
         else:
-            explanation_parts.append(f"❌ Difficulty={difficulty:.3f} outside acceptable range")
+            explanation_parts.append(f"FAIL: Difficulty={difficulty:.3f} outside acceptable range")
 
         # Step 3: Final decision
         if quality == "Good":
-            explanation_parts.append(f"✓ RESULT: GOOD - Both metrics in ideal ranges")
+            explanation_parts.append(f"PASS: RESULT: GOOD - Both metrics in ideal ranges")
         elif quality == "Review":
-            explanation_parts.append(f"⚠️ RESULT: NEEDS REVIEW - Metrics marginally acceptable")
+            explanation_parts.append(f"WARN: RESULT: NEEDS REVIEW - Metrics marginally acceptable")
         else:
-            explanation_parts.append(f"❌ RESULT: POOR - One or more metrics below standards")
+            explanation_parts.append(f"FAIL: RESULT: POOR - One or more metrics below standards")
 
         return " | ".join(explanation_parts)
 
