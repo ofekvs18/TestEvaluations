@@ -21,7 +21,6 @@ from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl.chart import PieChart, BarChart, Reference
 from openpyxl.chart.series import DataPoint
 from openpyxl.chart.shapes import GraphicalProperties
-from openpyxl.chart.label import DataLabelList
 from openpyxl.drawing.image import Image as XLImage
 from openpyxl.drawing.fill import SolidColorFillProperties, ColorChoice
 
@@ -645,15 +644,6 @@ class AssemblyAgent:
                     pt.graphicalProperties = gp
 
                     chart.series[0].data_points.append(pt)
-
-                # Hide data labels on pie slices - show in legend instead
-                dLbls = DataLabelList()
-                dLbls.showPercent = False
-                dLbls.showVal = False
-                dLbls.showCatName = False
-                chart.series[0].dLbls = dLbls
-
-                # Legend is shown by default with category names
 
                 # Position chart to the right of the data (column E)
                 chart_anchor = f"E{data_start_row - 5}"
