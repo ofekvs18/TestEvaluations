@@ -111,6 +111,9 @@ class AssemblyAgent:
         # Sheet 6: Visualizations
         self._add_visualizations_sheet(wb, visualizations_output)
 
+        # Sheet 7: Question Score Distributions
+        self._add_question_distributions_sheet(wb, visualizations_output)
+
         # Save workbook
         output_path = self.output_dir / f"{base_name}_analysis.xlsx"
         wb.save(output_path)
@@ -432,6 +435,105 @@ class AssemblyAgent:
                         current_row += 2
 
             current_row += 2
+
+    def _add_question_distributions_sheet(self, wb: Workbook, visualizations_output: Dict[str, Any]):
+        """Add Question Score Distributions sheet showing how many students got each score."""
+        ws = wb.create_sheet("Question Score Distributions")
+
+        distributions = visualizations_output.get("question_distributions", {})
+        if not distributions:
+            ws.cell(row=1, column=1, value="No distribution data available")
+            return
+
+        # Add title
+        title_cell = ws.cell(row=1, column=1, value="Per-Question Score Distribution")
+        title_cell.font = Font(bold=True, size=16, color="FFFFFF")
+        title_cell.fill = PatternFill(start_color="2C3E50", end_color="2C3E50", fill_type="solid")
+        ws.merge_cells('A1:E1')
+
+        # Add explanation
+        explanation = ws.cell(row=2, column=1,
+            value="Shows how many students achieved each possible score for each question.")
+        explanation.font = Font(italic=True)
+        ws.merge_cells('A2:E2')
+
+        current_row = 4
+
+        # Process each question
+        for question_id, dist_data in distributions.items():
+            # Question header
+            header_cell = ws.cell(row=current_row, column=1, value=f"Question: {question_id}")
+            header_cell.font = Font(bold=True, size=14, color="FFFFFF")
+            header_cell.fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+            ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=5)
+            current_row += 1
+
+            # Statistics summary
+            stats_row = current_row
+            ws.cell(row=stats_row, column=1, value="Max Score:").font = Font(bold=True)
+            ws.cell(row=stats_row, column=2, value=dist_data.get("max_score", 0))
+            ws.cell(row=stats_row, column=3, value="Mean:").font = Font(bold=True)
+            ws.cell(row=stats_row, column=4, value=f"{dist_data.get('mean_score', 0):.2f}")
+            current_row += 1
+
+            ws.cell(row=current_row, column=1, value="Total Students:").font = Font(bold=True)
+            ws.cell(row=current_row, column=2, value=dist_data.get("total_students", 0))
+            ws.cell(row=current_row, column=3, value="Std Dev:").font = Font(bold=True)
+            ws.cell(row=current_row, column=4, value=f"{dist_data.get('std_dev', 0):.2f}")
+            current_row += 2
+
+            # Distribution table headers
+            headers = ["Score", "# Students", "Percentage", "Visual"]
+            for col_idx, header in enumerate(headers, 1):
+                cell = ws.cell(row=current_row, column=col_idx, value=header)
+                cell.font = Font(bold=True)
+                cell.fill = PatternFill(start_color="D9D9D9", end_color="D9D9D9", fill_type="solid")
+                cell.alignment = Alignment(horizontal="center")
+            current_row += 1
+
+            # Distribution data
+            score_counts = dist_data.get("score_counts", {})
+            score_percentages = dist_data.get("score_percentages", {})
+            max_count = max(score_counts.values()) if score_counts else 1
+
+            for score in sorted(score_counts.keys()):
+                count = score_counts[score]
+                percentage = score_percentages.get(score, 0)
+
+                # Score value
+                ws.cell(row=current_row, column=1, value=score).alignment = Alignment(horizontal="center")
+
+                # Student count
+                count_cell = ws.cell(row=current_row, column=2, value=count)
+                count_cell.alignment = Alignment(horizontal="center")
+
+                # Color code based on count
+                if count > 0:
+                    intensity = int(200 - (count / max_count * 150))  # Darker for more students
+                    count_cell.fill = PatternFill(
+                        start_color=f"9999{intensity:02X}",
+                        end_color=f"9999{intensity:02X}",
+                        fill_type="solid"
+                    )
+
+                # Percentage
+                pct_cell = ws.cell(row=current_row, column=3, value=f"{percentage:.1f}%")
+                pct_cell.alignment = Alignment(horizontal="center")
+
+                # Visual bar (using █ characters)
+                bar_length = int(percentage / 5)  # Scale to max 20 chars
+                visual = "█" * bar_length
+                ws.cell(row=current_row, column=4, value=visual)
+
+                current_row += 1
+
+            current_row += 2  # Space before next question
+
+        # Set column widths
+        ws.column_dimensions['A'].width = 12
+        ws.column_dimensions['B'].width = 15
+        ws.column_dimensions['C'].width = 15
+        ws.column_dimensions['D'].width = 50
 
     def _apply_conditional_formatting(self, ws, df: pd.DataFrame):
         """Apply conditional formatting to metrics."""

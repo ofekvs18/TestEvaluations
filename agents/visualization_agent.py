@@ -40,9 +40,13 @@ class VisualizationAgent:
         # Generate static images for Excel
         static_images = self._generate_static_images(scores, question_cols)
 
+        # Generate per-question score distribution data
+        question_distributions = self._generate_question_score_distributions(scores, question_cols)
+
         return {
             "plotly_figures": plotly_figures,
-            "static_images": static_images
+            "static_images": static_images,
+            "question_distributions": question_distributions
         }
 
     def _generate_plotly_figures(
@@ -227,6 +231,52 @@ class VisualizationAgent:
 
         return images
 
+    def _generate_question_score_distributions(
+        self,
+        scores: np.ndarray,
+        question_cols: pd.Index
+    ) -> Dict[str, Dict[str, Any]]:
+        """
+        Generate score distribution data for each question.
+
+        Args:
+            scores: NumPy array of student scores
+            question_cols: Index of question column names
+
+        Returns:
+            Dictionary mapping question_id to distribution data
+        """
+        distributions = {}
+
+        for idx, question_id in enumerate(question_cols):
+            q_scores = scores[:, idx]
+            max_score = int(np.max(q_scores))
+
+            # Count students for each possible score
+            score_counts = {}
+            for score_value in range(max_score + 1):
+                count = np.sum(q_scores == score_value)
+                score_counts[score_value] = int(count)
+
+            # Calculate percentages
+            total_students = len(q_scores)
+            score_percentages = {
+                score: (count / total_students * 100) if total_students > 0 else 0
+                for score, count in score_counts.items()
+            }
+
+            distributions[str(question_id)] = {
+                "max_score": max_score,
+                "score_counts": score_counts,
+                "score_percentages": score_percentages,
+                "total_students": total_students,
+                "mean_score": float(np.mean(q_scores)),
+                "median_score": float(np.median(q_scores)),
+                "std_dev": float(np.std(q_scores))
+            }
+
+        return distributions
+
     def _empty_visualizations(self) -> Dict[str, Any]:
         """Return empty visualizations structure."""
         return {
@@ -234,5 +284,6 @@ class VisualizationAgent:
                 "question_analysis": "<p>No data available</p>",
                 "test_level": []
             },
-            "static_images": []
+            "static_images": [],
+            "question_distributions": {}
         }
