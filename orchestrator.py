@@ -458,25 +458,23 @@ def main():
         epilog="""
 Examples:
   %(prog)s student_scores.xlsx
-  %(prog)s test_data.csv --weights weights.csv --output-dir ./reports
+  %(prog)s test_data.csv --output-dir ./reports
   %(prog)s exam_results.xlsx --sequential
 
 Output Files:
   - Excel workbook with multiple analysis sheets
   - Interactive HTML report with visualizations
   - Plain text summary report
+
+Note:
+  Question weights are automatically determined from the maximum score
+  achieved by any student for each question in the data.
 """
     )
 
     parser.add_argument(
         "input_data",
         help="Path to input data file (Excel .xlsx/.xls or CSV .csv)"
-    )
-
-    parser.add_argument(
-        "--weights",
-        help="Path to optional weights CSV file",
-        default=None
     )
 
     parser.add_argument(
@@ -498,7 +496,6 @@ Output Files:
         # Create and run orchestrator
         orchestrator = TestAnalysisOrchestrator(
             data_path=args.input_data,
-            weights_path=args.weights,
             output_dir=args.output_dir
         )
 
