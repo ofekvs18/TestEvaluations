@@ -101,7 +101,8 @@ class RecommendationsAgent:
                 "quality": quality,
                 "issues": issues,
                 "classification_reason": classification_reason,
-                "variance": round(np.var(q_scores), 3)
+                "variance": round(np.var(q_scores), 3),
+                "max_score": float(max_score)
             })
 
         return analysis
