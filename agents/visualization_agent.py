@@ -7,6 +7,8 @@ Creates interactive and static visualizations for test analysis.
 import io
 from typing import Any, Dict, List
 
+import matplotlib
+matplotlib.use('Agg')  # Use non-GUI backend for thread safety
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -38,9 +40,13 @@ class VisualizationAgent:
         # Generate static images for Excel
         static_images = self._generate_static_images(scores, question_cols)
 
+        # Generate per-question score distribution data
+        question_distributions = self._generate_question_score_distributions(scores, question_cols)
+
         return {
             "plotly_figures": plotly_figures,
-            "static_images": static_images
+            "static_images": static_images,
+            "question_distributions": question_distributions
         }
 
     def _generate_plotly_figures(
@@ -188,6 +194,43 @@ class VisualizationAgent:
         })
         plt.close(fig)
 
+        # Question Weights (Max Scores) Analysis
+        fig, ax = plt.subplots(figsize=(12, 6))
+        max_scores = scores.max(axis=0)
+        question_labels = [str(q) for q in question_cols]
+
+        bars = ax.bar(range(len(question_labels)), max_scores, edgecolor='black', alpha=0.7, color='steelblue')
+        ax.set_title('Question Weights (Maximum Possible Scores)', fontsize=14, fontweight='bold')
+        ax.set_xlabel('Question')
+        ax.set_ylabel('Max Score (Weight)')
+        ax.set_xticks(range(len(question_labels)))
+        ax.set_xticklabels(question_labels, rotation=45, ha='right')
+        ax.grid(True, alpha=0.3, axis='y')
+
+        # Add value labels on bars
+        for i, (bar, score) in enumerate(zip(bars, max_scores)):
+            height = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width()/2., height,
+                   f'{int(score)}',
+                   ha='center', va='bottom', fontsize=9, fontweight='bold')
+
+        # Add summary statistics
+        total_weight = max_scores.sum()
+        mean_weight = max_scores.mean()
+        ax.text(0.02, 0.98, f'Total: {int(total_weight)} points\nMean: {mean_weight:.1f} points',
+               transform=ax.transAxes, verticalalignment='top',
+               bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5),
+               fontsize=10)
+
+        buf = io.BytesIO()
+        fig.savefig(buf, format='png', dpi=150, bbox_inches='tight')
+        buf.seek(0)
+        images.append({
+            "title": "Question Weights Analysis",
+            "image_bytes": buf.getvalue()
+        })
+        plt.close(fig)
+
         # Difficulty-Discrimination Scatter
         fig, ax = plt.subplots(figsize=(10, 8))
         difficulties = np.mean(scores, axis=0)
@@ -225,6 +268,52 @@ class VisualizationAgent:
 
         return images
 
+    def _generate_question_score_distributions(
+        self,
+        scores: np.ndarray,
+        question_cols: pd.Index
+    ) -> Dict[str, Dict[str, Any]]:
+        """
+        Generate score distribution data for each question.
+
+        Args:
+            scores: NumPy array of student scores
+            question_cols: Index of question column names
+
+        Returns:
+            Dictionary mapping question_id to distribution data
+        """
+        distributions = {}
+
+        for idx, question_id in enumerate(question_cols):
+            q_scores = scores[:, idx]
+            max_score = int(np.max(q_scores))
+
+            # Count students for each possible score
+            score_counts = {}
+            for score_value in range(max_score + 1):
+                count = np.sum(q_scores == score_value)
+                score_counts[score_value] = int(count)
+
+            # Calculate percentages
+            total_students = len(q_scores)
+            score_percentages = {
+                score: (count / total_students * 100) if total_students > 0 else 0
+                for score, count in score_counts.items()
+            }
+
+            distributions[str(question_id)] = {
+                "max_score": max_score,
+                "score_counts": score_counts,
+                "score_percentages": score_percentages,
+                "total_students": total_students,
+                "mean_score": float(np.mean(q_scores)),
+                "median_score": float(np.median(q_scores)),
+                "std_dev": float(np.std(q_scores))
+            }
+
+        return distributions
+
     def _empty_visualizations(self) -> Dict[str, Any]:
         """Return empty visualizations structure."""
         return {
@@ -232,5 +321,6 @@ class VisualizationAgent:
                 "question_analysis": "<p>No data available</p>",
                 "test_level": []
             },
-            "static_images": []
+            "static_images": [],
+            "question_distributions": {}
         }

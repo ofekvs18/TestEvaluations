@@ -156,24 +156,23 @@ class TestAnalysisOrchestrator:
     def __init__(
         self,
         data_path: str,
-        weights_path: Optional[str] = None,
         output_dir: str = "results"
     ):
         """Initialize the orchestrator.
 
+        Question weights are automatically determined from the maximum score
+        achieved by any student for each question in the answers data.
+
         Args:
             data_path: Path to input Excel/CSV data file
-            weights_path: Optional path to weights CSV file
             output_dir: Directory for output files
         """
         self.data_path = Path(data_path)
-        self.weights_path = Path(weights_path) if weights_path else None
         self.output_dir = Path(output_dir)
 
         # Data containers
         self.raw_data: Optional[pd.DataFrame] = None
         self.cleaned_data: Optional[pd.DataFrame] = None
-        self.weights: Optional[pd.DataFrame] = None
         self.basic_stats: Optional[Dict[str, Any]] = None
 
         # Agent results
@@ -238,11 +237,7 @@ class TestAnalysisOrchestrator:
             print(f"  - Questions: {self.basic_stats['question_count']}")
             print(f"  - Mean Total Score: {self.basic_stats['mean_total_score']:.2f}")
             print(f"  - Std Dev: {self.basic_stats['std_total_score']:.2f}")
-
-            # Step 5: Load optional weights
-            if self.weights_path:
-                self.weights = pd.read_csv(self.weights_path)
-                print(f"  ✓ Loaded weights from: {self.weights_path}")
+            print(f"  ✓ Question weights will be auto-detected from maximum scores")
 
             self.timestamps['data_ready'] = datetime.now()
             return True
@@ -258,7 +253,7 @@ class TestAnalysisOrchestrator:
             Metrics calculation results
         """
         agent = MetricsAgent()
-        return agent.calculate_metrics(self.cleaned_data, self.weights)
+        return agent.calculate_metrics(self.cleaned_data)
 
     def _run_visualization_agent(self) -> Dict[str, Any]:
         """Execute Agent 2: Visualization Generator.
@@ -425,8 +420,9 @@ class TestAnalysisOrchestrator:
         print("\n[Step 3/3] Assembling final outputs...")
         assembly_result = self.assemble_final_outputs()
 
-        # Calculate execution time
-        total_time = (self.timestamps['assembly_done'] - self.timestamps['start']).total_seconds()
+        # Calculate execution time (handle case where assembly failed)
+        end_time = self.timestamps.get('assembly_done') or datetime.now()
+        total_time = (end_time - self.timestamps['start']).total_seconds()
 
         # Compile final results
         final_result = {

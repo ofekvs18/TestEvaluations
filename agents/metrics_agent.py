@@ -15,15 +15,16 @@ class MetricsAgent:
 
     def calculate_metrics(
         self,
-        data: pd.DataFrame,
-        weights: Optional[pd.DataFrame] = None
+        data: pd.DataFrame
     ) -> Dict[str, Any]:
         """
         Calculate comprehensive test metrics.
 
+        Question weights (max possible scores) are automatically determined
+        from the maximum score achieved by any student for each question.
+
         Args:
             data: DataFrame with student responses
-            weights: Optional DataFrame with question weights
 
         Returns:
             Dictionary containing test statistics and question metrics
@@ -41,10 +42,13 @@ class MetricsAgent:
 
         # Calculate test-level statistics
         total_scores = scores.sum(axis=1)
+        max_possible_score = scores.max(axis=0).sum()  # Sum of max scores per question
+
         test_statistics = {
             "total_students": len(data),
             "total_questions": len(question_cols),
-            "mean_score": float(np.mean(total_scores) / len(question_cols) * 100),
+            "mean_score": float(np.mean(total_scores)),
+            "mean_score_percentage": float(np.mean(total_scores) / max_possible_score * 100) if max_possible_score > 0 else 0.0,
             "std_deviation": float(np.std(total_scores)),
             "min_score": float(np.min(total_scores)),
             "max_score": float(np.max(total_scores)),
@@ -58,8 +62,14 @@ class MetricsAgent:
         for idx, col in enumerate(question_cols):
             q_scores = scores[:, idx]
 
-            # Difficulty (proportion correct)
-            difficulty = np.mean(q_scores)
+            # Get max possible score for this question
+            max_score = np.max(q_scores)
+            if max_score == 0:
+                max_score = 1  # Avoid division by zero
+
+            # Difficulty (inverted proportion correct) - normalized to 0-1 range
+            # High value = hard question, Low value = easy question
+            difficulty = 1 - (np.mean(q_scores) / max_score)
 
             # Discrimination (point-biserial correlation with total)
             discrimination = self._calculate_discrimination(q_scores, total_scores)
@@ -69,7 +79,8 @@ class MetricsAgent:
                 "difficulty": float(difficulty),
                 "discrimination": float(discrimination),
                 "variance": float(np.var(q_scores)),
-                "mean": float(np.mean(q_scores))
+                "mean": float(np.mean(q_scores)),
+                "max_score": float(max_score)
             })
 
         return {

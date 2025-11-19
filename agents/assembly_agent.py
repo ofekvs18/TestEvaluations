@@ -18,7 +18,11 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.formatting.rule import ColorScaleRule, CellIsRule
 from openpyxl.utils.dataframe import dataframe_to_rows
+from openpyxl.chart import PieChart, BarChart, Reference
+from openpyxl.chart.series import DataPoint
+from openpyxl.chart.shapes import GraphicalProperties
 from openpyxl.drawing.image import Image as XLImage
+from openpyxl.drawing.fill import SolidColorFillProperties, ColorChoice
 
 
 class AssemblyAgent:
@@ -93,20 +97,11 @@ class AssemblyAgent:
         # Remove default sheet
         wb.remove(wb.active)
 
-        # Sheet 1: Question Analysis
-        self._add_question_analysis_sheet(wb, recommendations_output)
+        # Sheet 1: Analysis & Recommendations (combined Visualizations and Recommendations)
+        self._add_analysis_recommendations_sheet(wb, visualizations_output, recommendations_output)
 
-        # Sheet 2: Question Rankings
-        self._add_question_rankings_sheet(wb, recommendations_output)
-
-        # Sheet 3: Distribution Details
-        self._add_distribution_details_sheet(wb, recommendations_output)
-
-        # Sheet 4: Recommendations
-        self._add_recommendations_sheet(wb, recommendations_output)
-
-        # Sheet 5: Visualizations
-        self._add_visualizations_sheet(wb, visualizations_output)
+        # Sheet 2: Detailed Question Analysis (formerly Question Score Distributions)
+        self._add_question_distributions_sheet(wb, visualizations_output, recommendations_output)
 
         # Save workbook
         output_path = self.output_dir / f"{base_name}_analysis.xlsx"
@@ -124,30 +119,160 @@ class AssemblyAgent:
             ws.cell(row=1, column=1, value="No question analysis data available")
             return
 
+        # Add metric explanations and thresholds at the top
+        ws.cell(row=1, column=1, value="Metrics Explanation:")
+        ws.cell(row=1, column=1).font = Font(bold=True, size=12)
+
+        explanations = [
+            ("Difficulty", "How hard the question is (0=very easy, 1=very hard). Higher values mean fewer students answered correctly."),
+            ("Discrimination", "How well the question differentiates between high and low performers. Higher values are better."),
+            ("", ""),  # Blank row
+            ("Quality Thresholds:", ""),
+            ("Discrimination", "< 0.15 = Poor | 0.15-0.30 = Low | >= 0.30 = Good"),
+            ("Difficulty", "< 0.20 (too easy) or > 0.80 (too hard) = Poor | 0.20-0.80 = Acceptable | 0.30-0.70 = Ideal"),
+        ]
+
+        current_row = 2
+        for label, value in explanations:
+            if label:
+                ws.cell(row=current_row, column=1, value=label).font = Font(bold=True)
+            ws.cell(row=current_row, column=2, value=value)
+            current_row += 1
+
+        # Add spacing
+        current_row += 1
+
         # Convert to DataFrame for easier handling
         df = pd.DataFrame(question_data)
 
         # Write headers
         headers = list(df.columns)
+        header_row = current_row
         for col_idx, header in enumerate(headers, 1):
-            cell = ws.cell(row=1, column=col_idx, value=header)
+            cell = ws.cell(row=header_row, column=col_idx, value=header)
             cell.font = Font(bold=True, color="FFFFFF")
             cell.fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
             cell.alignment = Alignment(horizontal="center", vertical="center")
 
         # Write data
-        for row_idx, row in enumerate(df.itertuples(index=False), 2):
+        data_start_row = header_row + 1
+        for row_idx, row in enumerate(df.itertuples(index=False), data_start_row):
             for col_idx, value in enumerate(row, 1):
+                # Convert lists to comma-separated strings for Excel compatibility
+                if isinstance(value, list):
+                    value = ", ".join(str(v) for v in value)
                 ws.cell(row=row_idx, column=col_idx, value=value)
-
-        # Apply conditional formatting for difficulty and discrimination
-        self._apply_conditional_formatting(ws, df)
 
         # Auto-adjust column widths
         self._auto_adjust_columns(ws)
 
-        # Add filters
-        ws.auto_filter.ref = ws.dimensions
+        # Add filters (from header row to end)
+        ws.auto_filter.ref = f"A{header_row}:{ws.dimensions.split(':')[1]}"
+
+    def _add_classification_breakdown_sheet(self, wb: Workbook, recommendations_output: Dict[str, Any]):
+        """Add Classification Decision Logic sheet showing why each question was classified."""
+        ws = wb.create_sheet("Classification Decision Logic")
+
+        # Get question analysis data
+        question_data = recommendations_output.get("question_analysis", [])
+        if not question_data:
+            ws.cell(row=1, column=1, value="No question analysis data available")
+            return
+
+        # Add title
+        title_cell = ws.cell(row=1, column=1, value="Question Classification Decision Breakdown")
+        title_cell.font = Font(bold=True, size=16, color="FFFFFF")
+        title_cell.fill = PatternFill(start_color="2C3E50", end_color="2C3E50", fill_type="solid")
+        ws.merge_cells('A1:D1')
+
+        # Add explanation
+        explanation = ws.cell(row=2, column=1,
+            value="This sheet explains the step-by-step decision logic for classifying each question's quality.")
+        explanation.font = Font(italic=True)
+        ws.merge_cells('A2:D2')
+
+        # Add thresholds reference
+        ws.cell(row=4, column=1, value="Quality Thresholds Reference:")
+        ws.cell(row=4, column=1).font = Font(bold=True, size=12)
+
+        thresholds = [
+            ("Discrimination", "< 0.15 = Poor | 0.15-0.30 = Low | ≥ 0.30 = Good"),
+            ("Difficulty", "< 0.20 or > 0.80 = Poor | 0.20-0.80 = Acceptable | 0.30-0.70 = Ideal"),
+            ("", ""),
+        ]
+
+        current_row = 5
+        for label, value in thresholds:
+            ws.cell(row=current_row, column=1, value=label).font = Font(bold=True)
+            ws.cell(row=current_row, column=2, value=value)
+            current_row += 1
+
+        # Headers for question breakdown
+        current_row += 1
+        headers = ["Question", "Difficulty", "Discrimination", "Quality", "Decision Logic Explanation"]
+        for col_idx, header in enumerate(headers, 1):
+            cell = ws.cell(row=current_row, column=col_idx, value=header)
+            cell.font = Font(bold=True, color="FFFFFF")
+            cell.fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+        current_row += 1
+
+        # Add each question's breakdown
+        for q_data in question_data:
+            question_id = q_data.get("question_id", "N/A")
+            difficulty = q_data.get("difficulty", 0.0)
+            discrimination = q_data.get("discrimination", 0.0)
+            quality = q_data.get("quality", "N/A")
+            explanation = q_data.get("classification_reason", "No explanation available")
+
+            # Question ID
+            ws.cell(row=current_row, column=1, value=question_id)
+
+            # Difficulty with color coding
+            diff_cell = ws.cell(row=current_row, column=2, value=f"{difficulty:.3f}")
+            if difficulty < 0.2 or difficulty > 0.8:
+                diff_cell.fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")  # Red
+            elif 0.3 <= difficulty <= 0.7:
+                diff_cell.fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")  # Green
+            else:
+                diff_cell.fill = PatternFill(start_color="FFEB9C", end_color="FFEB9C", fill_type="solid")  # Yellow
+
+            # Discrimination with color coding
+            disc_cell = ws.cell(row=current_row, column=3, value=f"{discrimination:.3f}")
+            if discrimination < 0.15:
+                disc_cell.fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")  # Red
+            elif discrimination >= 0.3:
+                disc_cell.fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")  # Green
+            else:
+                disc_cell.fill = PatternFill(start_color="FFEB9C", end_color="FFEB9C", fill_type="solid")  # Yellow
+
+            # Quality with color coding
+            quality_cell = ws.cell(row=current_row, column=4, value=quality)
+            quality_cell.font = Font(bold=True)
+            if quality == "Good":
+                quality_cell.fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")  # Green
+            elif quality == "Review":
+                quality_cell.fill = PatternFill(start_color="FFEB9C", end_color="FFEB9C", fill_type="solid")  # Yellow
+            else:
+                quality_cell.fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")  # Red
+
+            # Explanation with word wrap
+            explanation_cell = ws.cell(row=current_row, column=5, value=explanation)
+            explanation_cell.alignment = Alignment(wrap_text=True, vertical="top")
+
+            current_row += 1
+
+        # Set column widths
+        ws.column_dimensions['A'].width = 12
+        ws.column_dimensions['B'].width = 12
+        ws.column_dimensions['C'].width = 15
+        ws.column_dimensions['D'].width = 12
+        ws.column_dimensions['E'].width = 100  # Wide for explanation
+
+        # Set row heights for better readability
+        for row_num in range(9, current_row):
+            ws.row_dimensions[row_num].height = 40
 
     def _add_question_rankings_sheet(self, wb: Workbook, recommendations_output: Dict[str, Any]):
         """Add Question Rankings sheet."""
@@ -182,6 +307,9 @@ class AssemblyAgent:
                     # Data
                     for _, row in df.iterrows():
                         for col_idx, value in enumerate(row, 1):
+                            # Convert lists to comma-separated strings
+                            if isinstance(value, list):
+                                value = ", ".join(str(v) for v in value)
                             ws.cell(row=current_row, column=col_idx, value=value)
                         current_row += 1
                 else:
@@ -214,6 +342,9 @@ class AssemblyAgent:
             if isinstance(data, dict):
                 for key, value in data.items():
                     ws.cell(row=current_row, column=1, value=key)
+                    # Convert lists to comma-separated strings
+                    if isinstance(value, list):
+                        value = ", ".join(str(v) for v in value)
                     ws.cell(row=current_row, column=2, value=value)
                     current_row += 1
             elif isinstance(data, list):
@@ -222,6 +353,98 @@ class AssemblyAgent:
                     current_row += 1
 
             current_row += 1
+
+        self._auto_adjust_columns(ws)
+
+    def _add_analysis_recommendations_sheet(self, wb: Workbook, visualizations_output: Dict[str, Any], recommendations_output: Dict[str, Any]):
+        """Add combined Analysis & Recommendations sheet with visualizations and recommendations."""
+        ws = wb.create_sheet("Analysis & Recommendations")
+
+        current_row = 1
+
+        # Section 1: Visualizations
+        static_images = visualizations_output.get("static_images", [])
+        if static_images:
+            # Visualizations header
+            cell = ws.cell(row=current_row, column=1, value="Test Analysis Visualizations")
+            cell.font = Font(bold=True, size=16, color="FFFFFF")
+            cell.fill = PatternFill(start_color="2C3E50", end_color="2C3E50", fill_type="solid")
+            current_row += 2
+
+            for img_data in static_images:
+                if isinstance(img_data, dict):
+                    # Add title
+                    title = img_data.get("title", "Visualization")
+                    cell = ws.cell(row=current_row, column=1, value=title)
+                    cell.font = Font(bold=True, size=12)
+                    current_row += 2
+
+                    # Add image
+                    img_bytes = img_data.get("image_bytes")
+                    if img_bytes:
+                        try:
+                            # Create image from bytes
+                            img_stream = io.BytesIO(img_bytes)
+                            xl_img = XLImage(img_stream)
+
+                            # Resize if needed
+                            xl_img.width = min(xl_img.width, 800)
+                            xl_img.height = min(xl_img.height, 600)
+
+                            # Add to worksheet
+                            ws.add_image(xl_img, f"A{current_row}")
+
+                            # Move down to accommodate image
+                            current_row += int(xl_img.height / 15) + 5
+                        except Exception as e:
+                            ws.cell(row=current_row, column=1, value=f"Error loading image: {str(e)}")
+                            current_row += 2
+
+                current_row += 2
+
+        # Section 2: Recommendations
+        recommendations = recommendations_output.get("recommendations", [])
+        if recommendations:
+            # Add spacing between sections
+            current_row += 2
+
+            # Recommendations header
+            cell = ws.cell(row=current_row, column=1, value="Test Improvement Recommendations")
+            cell.font = Font(bold=True, size=16, color="FFFFFF")
+            cell.fill = PatternFill(start_color="2C3E50", end_color="2C3E50", fill_type="solid")
+            current_row += 2
+
+            if isinstance(recommendations, list):
+                for idx, rec in enumerate(recommendations, 1):
+                    if isinstance(rec, dict):
+                        # Priority
+                        priority = rec.get("priority", "Medium")
+                        priority_cell = ws.cell(row=current_row, column=1, value=f"Priority: {priority}")
+
+                        # Color code by priority
+                        if priority.lower() == "high":
+                            priority_cell.font = Font(color="FF0000", bold=True)
+                        elif priority.lower() == "medium":
+                            priority_cell.font = Font(color="FFA500", bold=True)
+                        else:
+                            priority_cell.font = Font(color="008000", bold=True)
+
+                        current_row += 1
+
+                        # Recommendation text
+                        rec_text = rec.get("recommendation", rec.get("text", str(rec)))
+                        ws.cell(row=current_row, column=1, value=rec_text)
+                        current_row += 1
+
+                        # Question IDs if available
+                        if "question_ids" in rec:
+                            ws.cell(row=current_row, column=1, value=f"Affected Questions: {', '.join(map(str, rec['question_ids']))}")
+                            current_row += 1
+
+                        current_row += 1  # Empty row
+                    else:
+                        ws.cell(row=current_row, column=1, value=str(rec))
+                        current_row += 1
 
         self._auto_adjust_columns(ws)
 
@@ -316,16 +539,240 @@ class AssemblyAgent:
 
             current_row += 2
 
-    def _apply_conditional_formatting(self, ws, df: pd.DataFrame):
+    def _add_question_distributions_sheet(self, wb: Workbook, visualizations_output: Dict[str, Any], recommendations_output: Dict[str, Any]):
+        """Add Detailed Question Analysis sheet showing how many students got each score."""
+        ws = wb.create_sheet("Detailed Question Analysis")
+
+        distributions = visualizations_output.get("question_distributions", {})
+        if not distributions:
+            ws.cell(row=1, column=1, value="No distribution data available")
+            return
+
+        # Get question analysis for difficulty and discrimination metrics
+        question_analysis = recommendations_output.get("question_analysis", [])
+        question_metrics = {q["question_id"]: q for q in question_analysis}
+
+        # Add title
+        title_cell = ws.cell(row=1, column=1, value="Detailed Question Analysis")
+        title_cell.font = Font(bold=True, size=16, color="FFFFFF")
+        title_cell.fill = PatternFill(start_color="2C3E50", end_color="2C3E50", fill_type="solid")
+        ws.merge_cells('A1:E1')
+
+        # Add explanation
+        explanation = ws.cell(row=2, column=1,
+            value="Shows detailed metrics, issues, and score distribution for each question with visual charts.")
+        explanation.font = Font(italic=True)
+        ws.merge_cells('A2:E2')
+
+        # Add metric explanations
+        current_row = 4
+        ws.cell(row=current_row, column=1, value="Metrics Explanation:")
+        ws.cell(row=current_row, column=1).font = Font(bold=True, size=11)
+        current_row += 1
+
+        explanations = [
+            ("Difficulty:", "How hard the question is (0=very easy, 1=very hard). Higher values mean fewer students answered correctly."),
+            ("Discrimination:", "How well the question differentiates between high and low performers. Higher values are better."),
+        ]
+
+        for label, value in explanations:
+            ws.cell(row=current_row, column=1, value=label).font = Font(bold=True)
+            ws.cell(row=current_row, column=2, value=value)
+            ws.merge_cells(start_row=current_row, start_column=2, end_row=current_row, end_column=6)
+            current_row += 1
+
+        current_row += 1  # Add spacing
+
+        # Add quality thresholds
+        ws.cell(row=current_row, column=1, value="Quality Thresholds:")
+        ws.cell(row=current_row, column=1).font = Font(bold=True, size=11)
+        current_row += 1
+
+        thresholds = [
+            ("Discrimination:", "< 0.15 = Poor | 0.15-0.30 = Low | >= 0.30 = Good"),
+            ("Difficulty:", "< 0.20 (too easy) or > 0.80 (too hard) = Poor | 0.20-0.80 = Acceptable | 0.30-0.70 = Ideal"),
+        ]
+
+        for label, value in thresholds:
+            ws.cell(row=current_row, column=1, value=label).font = Font(bold=True)
+            ws.cell(row=current_row, column=2, value=value)
+            ws.merge_cells(start_row=current_row, start_column=2, end_row=current_row, end_column=6)
+            current_row += 1
+
+        current_row += 1  # Add spacing
+
+        # Process each question
+        for question_id, dist_data in distributions.items():
+            # Question header
+            header_cell = ws.cell(row=current_row, column=1, value=f"Question: {question_id}")
+            header_cell.font = Font(bold=True, size=14, color="FFFFFF")
+            header_cell.fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+            ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=5)
+            current_row += 1
+
+            # Get metrics for this question
+            metrics = question_metrics.get(question_id, {})
+            difficulty = metrics.get("difficulty", 0)
+            discrimination = metrics.get("discrimination", 0)
+            quality = metrics.get("quality", "N/A")
+
+            # Statistics summary - Row 1
+            stats_row = current_row
+            ws.cell(row=stats_row, column=1, value="Max Score:").font = Font(bold=True)
+            ws.cell(row=stats_row, column=2, value=dist_data.get("max_score", 0))
+            ws.cell(row=stats_row, column=3, value="Mean:").font = Font(bold=True)
+            ws.cell(row=stats_row, column=4, value=f"{dist_data.get('mean_score', 0):.2f}")
+            ws.cell(row=stats_row, column=5, value="Quality:").font = Font(bold=True)
+            ws.cell(row=stats_row, column=6, value=quality)
+            current_row += 1
+
+            # Statistics summary - Row 2
+            ws.cell(row=current_row, column=1, value="Total Students:").font = Font(bold=True)
+            ws.cell(row=current_row, column=2, value=dist_data.get("total_students", 0))
+            ws.cell(row=current_row, column=3, value="Std Dev:").font = Font(bold=True)
+            ws.cell(row=current_row, column=4, value=f"{dist_data.get('std_dev', 0):.2f}")
+            current_row += 1
+
+            # Statistics summary - Row 3 (difficulty and discrimination)
+            ws.cell(row=current_row, column=1, value="Difficulty:").font = Font(bold=True)
+            ws.cell(row=current_row, column=2, value=f"{difficulty:.3f}")
+            ws.cell(row=current_row, column=3, value="Discrimination:").font = Font(bold=True)
+            ws.cell(row=current_row, column=4, value=f"{discrimination:.3f}")
+            current_row += 1
+
+            # Statistics summary - Row 4 (issues)
+            issues = metrics.get("issues", [])
+            issues_text = ", ".join(issues) if issues else "No issues"
+            ws.cell(row=current_row, column=1, value="Issues:").font = Font(bold=True)
+            issues_cell = ws.cell(row=current_row, column=2, value=issues_text)
+            ws.merge_cells(start_row=current_row, start_column=2, end_row=current_row, end_column=6)
+
+            # Color code based on issues
+            if any(keyword in issues_text.lower() for keyword in ["negative", "very poor", "too difficult", "too easy"]):
+                issues_cell.font = Font(color="C00000")  # Red for serious issues
+            elif "no" in issues_text.lower() and "issues" in issues_text.lower():
+                issues_cell.font = Font(color="00B050")  # Green for no issues
+            else:
+                issues_cell.font = Font(color="FF9900")  # Orange for minor issues
+
+            current_row += 2
+
+            # Distribution table headers
+            headers = ["Score", "# Students", "Percentage"]
+            for col_idx, header in enumerate(headers, 1):
+                cell = ws.cell(row=current_row, column=col_idx, value=header)
+                cell.font = Font(bold=True)
+                cell.fill = PatternFill(start_color="D9D9D9", end_color="D9D9D9", fill_type="solid")
+                cell.alignment = Alignment(horizontal="center")
+            current_row += 1
+
+            # Distribution data - save the starting row for the chart
+            data_start_row = current_row
+            score_counts = dist_data.get("score_counts", {})
+            score_percentages = dist_data.get("score_percentages", {})
+            max_count = max(score_counts.values()) if score_counts else 1
+
+            for score in sorted(score_counts.keys()):
+                count = score_counts[score]
+                percentage = score_percentages.get(score, 0)
+
+                # Score value
+                ws.cell(row=current_row, column=1, value=f"Score {score}").alignment = Alignment(horizontal="center")
+
+                # Student count
+                count_cell = ws.cell(row=current_row, column=2, value=count)
+                count_cell.alignment = Alignment(horizontal="center")
+
+                # Color code based on count
+                if count > 0:
+                    intensity = int(200 - (count / max_count * 150))  # Darker for more students
+                    count_cell.fill = PatternFill(
+                        start_color=f"9999{intensity:02X}",
+                        end_color=f"9999{intensity:02X}",
+                        fill_type="solid"
+                    )
+
+                # Percentage (store as numeric value for charting)
+                pct_cell = ws.cell(row=current_row, column=3, value=percentage)
+                pct_cell.number_format = '0.0"%"'  # Display as percentage with 1 decimal
+                pct_cell.alignment = Alignment(horizontal="center")
+
+                current_row += 1
+
+            # Create pie chart for this question
+            data_end_row = current_row - 1
+
+            if data_end_row >= data_start_row:
+                chart = PieChart()
+                chart.title = f"{question_id} Score Distribution"
+                chart.height = 6   # Height in cm (smaller)
+                chart.width = 8   # Width in cm (smaller)
+
+                # Data for pie chart: student counts
+                labels = Reference(ws, min_col=1, min_row=data_start_row, max_row=data_end_row)
+                data = Reference(ws, min_col=2, min_row=data_start_row, max_row=data_end_row)
+
+                chart.add_data(data, titles_from_data=False)
+                chart.set_categories(labels)
+
+                # Apply gradient colors from red (low scores) to green (high scores)
+                max_score = dist_data.get("max_score", 1)
+                num_slices = data_end_row - data_start_row + 1
+
+                # Create gradient colors
+                for idx in range(num_slices):
+                    # Calculate color based on position (0 = red, max = green)
+                    ratio = idx / max(1, max_score)
+
+                    # RGB gradient: Red -> Yellow -> Green
+                    if ratio < 0.5:
+                        # Red to Yellow (decrease blue, increase green)
+                        r = 255
+                        g = int(255 * (ratio * 2))
+                        b = 0
+                    else:
+                        # Yellow to Green (decrease red, keep green high)
+                        r = int(255 * (1 - (ratio - 0.5) * 2))
+                        g = 255
+                        b = 0
+
+                    # Convert to hex color
+                    color_hex = f"{r:02X}{g:02X}{b:02X}"
+
+                    # Create data point with color
+                    pt = DataPoint(idx=idx)
+
+                    # Create graphical properties with solid fill
+                    gp = GraphicalProperties()
+                    gp.solidFill = ColorChoice(srgbClr=color_hex)
+                    pt.graphicalProperties = gp
+
+                    chart.series[0].data_points.append(pt)
+
+                # Position chart to the right of the data (column E)
+                chart_anchor = f"E{data_start_row - 5}"
+                ws.add_chart(chart, chart_anchor)
+
+            current_row += 2  # Space before next question
+
+        # Set column widths
+        ws.column_dimensions['A'].width = 15
+        ws.column_dimensions['B'].width = 15
+        ws.column_dimensions['C'].width = 15
+
+    def _apply_conditional_formatting(self, ws, df: pd.DataFrame, header_row: int = 1):
         """Apply conditional formatting to metrics."""
         # Find difficulty and discrimination columns
+        data_start_row = header_row + 1
+        data_end_row = header_row + len(df)
+
         for col_idx, col_name in enumerate(df.columns, 1):
-            col_letter = ws.cell(row=1, column=col_idx).column_letter
+            col_letter = ws.cell(row=header_row, column=col_idx).column_letter
 
             if "difficulty" in col_name.lower():
                 # Color scale for difficulty (0.3-0.7 is ideal)
                 ws.conditional_formatting.add(
-                    f"{col_letter}2:{col_letter}{len(df) + 1}",
+                    f"{col_letter}{data_start_row}:{col_letter}{data_end_row}",
                     ColorScaleRule(
                         start_type="num", start_value=0, start_color="FF0000",
                         mid_type="num", mid_value=0.5, mid_color="00FF00",
@@ -336,7 +783,7 @@ class AssemblyAgent:
             elif "discrimination" in col_name.lower():
                 # Color scale for discrimination (higher is better)
                 ws.conditional_formatting.add(
-                    f"{col_letter}2:{col_letter}{len(df) + 1}",
+                    f"{col_letter}{data_start_row}:{col_letter}{data_end_row}",
                     ColorScaleRule(
                         start_type="num", start_value=0, start_color="FF0000",
                         mid_type="num", mid_value=0.3, mid_color="FFFF00",
@@ -569,7 +1016,7 @@ class AssemblyAgent:
 </html>"""
 
         output_path = self.output_dir / f"{base_name}_report.html"
-        output_path.write_text(html_content)
+        output_path.write_text(html_content, encoding='utf-8')
 
         return output_path
 
@@ -585,12 +1032,16 @@ class AssemblyAgent:
         total_students = test_stats.get("total_students", "N/A")
         total_questions = test_stats.get("total_questions", "N/A")
         mean_score = test_stats.get("mean_score", "N/A")
+        mean_score_pct = test_stats.get("mean_score_percentage", None)
         std_dev = test_stats.get("std_deviation", "N/A")
         reliability = test_stats.get("cronbach_alpha", "N/A")
 
         # Format numeric values
         if isinstance(mean_score, (int, float)):
-            mean_score = f"{mean_score:.2f}%"
+            if mean_score_pct is not None:
+                mean_score = f"{mean_score:.1f} ({mean_score_pct:.1f}%)"
+            else:
+                mean_score = f"{mean_score:.2f}"
         if isinstance(std_dev, (int, float)):
             std_dev = f"{std_dev:.2f}"
         if isinstance(reliability, (int, float)):
@@ -701,12 +1152,16 @@ class AssemblyAgent:
         total_students = test_stats.get("total_students", "N/A")
         total_questions = test_stats.get("total_questions", "N/A")
         mean_score = test_stats.get("mean_score", "N/A")
+        mean_score_pct = test_stats.get("mean_score_percentage", None)
         std_dev = test_stats.get("std_deviation", "N/A")
         reliability = test_stats.get("cronbach_alpha", "N/A")
 
         # Format values
         if isinstance(mean_score, (int, float)):
-            mean_score_str = f"{mean_score:.2f}%"
+            if mean_score_pct is not None:
+                mean_score_str = f"{mean_score:.1f} ({mean_score_pct:.1f}%)"
+            else:
+                mean_score_str = f"{mean_score:.2f}"
         else:
             mean_score_str = str(mean_score)
 
@@ -788,7 +1243,7 @@ Report generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 """
 
         output_path = self.output_dir / f"{base_name}_summary.txt"
-        output_path.write_text(summary_text)
+        output_path.write_text(summary_text, encoding='utf-8')
 
         return output_path
 
@@ -805,8 +1260,12 @@ Report generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
         print(f"Questions: {test_stats.get('total_questions', 'N/A')}")
 
         mean_score = test_stats.get("mean_score", "N/A")
+        mean_score_pct = test_stats.get("mean_score_percentage", None)
         if isinstance(mean_score, (int, float)):
-            print(f"Mean Score: {mean_score:.2f}%")
+            if mean_score_pct is not None:
+                print(f"Mean Score: {mean_score:.1f} ({mean_score_pct:.1f}%)")
+            else:
+                print(f"Mean Score: {mean_score:.2f}")
         else:
             print(f"Mean Score: {mean_score}")
 
