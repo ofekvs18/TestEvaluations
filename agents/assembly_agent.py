@@ -602,8 +602,8 @@ class AssemblyAgent:
         current_row += 1  # Add spacing
 
         # Process each question
-        for question_id, dist_data in distributions.items():
-            # Question header
+        for q_index, (question_id, dist_data) in enumerate(distributions.items(), start=1):
+            # Question header (show full question text)
             header_cell = ws.cell(row=current_row, column=1, value=f"Question: {question_id}")
             header_cell.font = Font(bold=True, size=14, color="FFFFFF")
             header_cell.fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
@@ -704,7 +704,7 @@ class AssemblyAgent:
 
             if data_end_row >= data_start_row:
                 chart = PieChart()
-                chart.title = f"{question_id} Score Distribution"
+                chart.title = f"Q{q_index} Score Distribution"
                 chart.height = 6   # Height in cm (smaller)
                 chart.width = 8   # Width in cm (smaller)
 
