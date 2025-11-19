@@ -92,23 +92,13 @@ class DataLoader:
             df: Raw DataFrame from file
 
         Returns:
-            Cleaned DataFrame with student scores
+            Cleaned DataFrame with student scores (preserves original question headers)
         """
         # Make a copy to avoid modifying original
         cleaned_df = df.copy()
 
-        # Standardize column names for questions
-        if len(cleaned_df.columns) > 1:
-            # Keep first column name, rename numeric columns to Q1, Q2, etc.
-            first_col = cleaned_df.columns[0]
-            question_cols = cleaned_df.columns[1:]
-
-            new_col_names = {first_col: first_col}
-            for i, col in enumerate(question_cols):
-                if not (isinstance(col, str) and col.startswith('Q')):
-                    new_col_names[col] = f"Q{i+1}"
-
-            cleaned_df = cleaned_df.rename(columns=new_col_names)
+        # Preserve original column names (questions from Excel headers)
+        # No renaming - keep the actual questions as column names
 
         # Fill NaN values with 0 (missing = 0 points)
         cleaned_df = cleaned_df.fillna(0)
